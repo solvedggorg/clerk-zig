@@ -13,8 +13,8 @@ Zig package that centralizes **solved.gg / iResolved product identity**:
 
 ## Status
 
-**Phase 0 scaffold + design/plan.** Implementation extracts and generalizes
-`rusty/src/auth/` (see `docs/DESIGN.md` and `docs/plans/2026-07-22-clerk-zig.md`).
+**Library in use.** First consumer: **[rusty](../rusty)** (`rusty auth
+login|logout|whoami|status` — CLI branding only; OAuth/store live here).
 
 ## Build
 
