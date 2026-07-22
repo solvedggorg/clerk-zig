@@ -15,9 +15,9 @@ pub const oauth = @import("oauth.zig");
 pub const callback = @import("callback.zig");
 pub const browser = @import("browser.zig");
 pub const store = @import("store.zig");
+pub const login = @import("login.zig");
 
-// Ported in plan Tasks 4–6:
-// pub const login = @import("login.zig");
+// Ported in plan Task 6:
 // pub const registry = @import("registry.zig");
 
 test {
@@ -31,6 +31,7 @@ test {
     _ = callback;
     _ = browser;
     _ = store;
+    _ = login;
 }
 
 test "version string non-empty" {
