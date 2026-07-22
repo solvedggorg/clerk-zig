@@ -244,11 +244,18 @@ fn parseTokenSet(allocator: std.mem.Allocator, body: []const u8) Error!TokenSet 
         };
     };
 
+    const access_token = try allocator.dupe(u8, access_s);
+    errdefer allocator.free(access_token);
+    const refresh_token: ?[]u8 = if (refresh_s) |r| try allocator.dupe(u8, r) else null;
+    errdefer if (refresh_token) |t| allocator.free(t);
+    const scope: ?[]u8 = if (scope_s) |s| try allocator.dupe(u8, s) else null;
+    // last dupe: no further allocation after this; caller owns on success
+
     return .{
-        .access_token = try allocator.dupe(u8, access_s),
-        .refresh_token = if (refresh_s) |r| try allocator.dupe(u8, r) else null,
+        .access_token = access_token,
+        .refresh_token = refresh_token,
         .expires_in = expires,
-        .scope = if (scope_s) |s| try allocator.dupe(u8, s) else null,
+        .scope = scope,
     };
 }
 
@@ -271,9 +278,14 @@ fn parseUserInfo(allocator: std.mem.Allocator, body: []const u8) Error!UserInfo 
             else => null,
         };
     };
+    const sub_owned = try allocator.dupe(u8, sub);
+    errdefer allocator.free(sub_owned);
+    const email: ?[]u8 = if (email_s) |e| try allocator.dupe(u8, e) else null;
+    // last dupe: no further allocation after this; caller owns on success
+
     return .{
-        .sub = try allocator.dupe(u8, sub),
-        .email = if (email_s) |e| try allocator.dupe(u8, e) else null,
+        .sub = sub_owned,
+        .email = email,
     };
 }
 
