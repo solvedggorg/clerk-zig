@@ -125,7 +125,7 @@ rusty, scripty, hasky, …
 
 ## Success criteria
 
-- [ ] `zig build` / `zig build test` green in clerk-zig
-- [ ] rusty has no local OAuth/PKCE/store source
-- [ ] Shared session DB path is `$PMS_HOME/auth/session.db`
-- [ ] CONSUMING.md accurate for path + tag deps
+- [x] `zig build` / `zig build test` green in clerk-zig
+- [x] rusty has no local OAuth/PKCE/store source
+- [x] Shared session DB path is `$PMS_HOME/auth/session.db`
+- [x] CONSUMING.md accurate for path + tag deps
