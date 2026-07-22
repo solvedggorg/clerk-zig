@@ -10,12 +10,12 @@ pub const version = "0.0.1-dev";
 
 pub const paths = @import("paths.zig");
 pub const config = @import("config.zig");
+pub const pkce = @import("pkce.zig");
+pub const oauth = @import("oauth.zig");
+pub const callback = @import("callback.zig");
+pub const browser = @import("browser.zig");
 
-// Ported in plan Tasks 2–4:
-// pub const pkce = @import("pkce.zig");
-// pub const oauth = @import("oauth.zig");
-// pub const callback = @import("callback.zig");
-// pub const browser = @import("browser.zig");
+// Ported in plan Tasks 3–4:
 // pub const store = @import("store.zig");
 // pub const login = @import("login.zig");
 // pub const registry = @import("registry.zig");
@@ -26,6 +26,10 @@ test {
     }
     _ = paths;
     _ = config;
+    _ = pkce;
+    _ = oauth;
+    _ = callback;
+    _ = browser;
 }
 
 test "version string non-empty" {
