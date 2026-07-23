@@ -16,9 +16,7 @@ pub const callback = @import("callback.zig");
 pub const browser = @import("browser.zig");
 pub const store = @import("store.zig");
 pub const login = @import("login.zig");
-
-// Ported in plan Task 6:
-// pub const registry = @import("registry.zig");
+pub const registry = @import("registry.zig");
 
 test {
     if (builtin.os.tag != .linux) {
@@ -32,6 +30,7 @@ test {
     _ = browser;
     _ = store;
     _ = login;
+    _ = registry;
 }
 
 test "version string non-empty" {
