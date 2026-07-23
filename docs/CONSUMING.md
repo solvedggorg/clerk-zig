@@ -6,11 +6,27 @@ How product toolchains (rusty, scripty, hasky, …) depend on this package.
 
 - Zig **0.16.x**
 - Linux
-- **zig-libsql** (session store)
+- **zig-libsql** is transitive via clerk-zig (no need for PMs to depend on it
+  unless they use libsql directly)
 
-## Local path (development)
+## Production (tag fetch)
 
-While hacking the monorepo:
+```sh
+zig fetch --save https://github.com/solvedggorg/clerk-zig/archive/refs/tags/v0.1.0.tar.gz
+```
+
+```zig
+// build.zig
+const clerk = b.dependency("clerk_zig", .{
+    .target = target,
+    .optimize = optimize,
+});
+mod.addImport("clerk_zig", clerk.module("clerk_zig"));
+```
+
+## Local path (development only)
+
+While hacking the monorepo, override with a path dep:
 
 ```zig
 // build.zig.zon
@@ -29,13 +45,7 @@ const clerk = b.dependency("clerk_zig", .{
 mod.addImport("clerk_zig", clerk.module("clerk_zig"));
 ```
 
-## Release tag (production)
-
-Prefer a published GitHub tag once cut:
-
-```sh
-zig fetch --save https://github.com/solvedggorg/clerk-zig/archive/refs/tags/v0.1.0.tar.gz
-```
+Do **not** ship path deps in production builds.
 
 ## Import
 
@@ -56,15 +66,63 @@ defer result.deinit(allocator);
 
 Module name: **`clerk_zig`**. Package name in `build.zig.zon`: **`clerk_zig`**.
 
-## CLI wiring (consumer-owned)
+## CLI skeleton (copy into your PM)
 
-Keep product-facing commands in the PM:
+Keep product-facing commands in the PM (`scripty auth …`, `hasky auth …`).
+Full reference: **rusty** `src/cli/auth_cmd.zig`.
 
-```text
-rusty auth login|logout|whoami|status
+```zig
+// e.g. src/cli/auth_cmd.zig — branding only
+const clerk = @import("clerk_zig");
+
+// login:
+var result = try clerk.login.run(io, allocator, env, out, err);
+defer result.deinit(allocator);
+
+// logout:
+try clerk.login.logout(io, allocator, env);
+
+// whoami / status: clerk.store.Store.open → get / refresh helpers
+// registry (optional for your CLI):
+//   var reg = try clerk.registry.Registry.load(io, allocator, env);
+//   defer reg.deinit();
+//   try reg.put(.{ .name = "scripty", .version = "…", .path = "…", .updated_at = … });
+//   try reg.save(io);
+//   for (reg.entries.items) |e| { … }  // list
 ```
 
-Call into `clerk_zig.login` / `store`; print brand-specific help and errors.
+Suggested subcommands: `login` | `logout` | `whoami` | `status` (+ optional
+registry list/register if the PM owns suite installs).
+
+## Registry API
+
+```zig
+var reg = try clerk.registry.Registry.load(io, allocator, env);
+defer reg.deinit();
+
+// Upsert
+try reg.put(.{
+    .name = "rusty",
+    .version = "0.1.0",
+    .path = "/path/to/install",
+    .updated_at = std.time.timestamp(),
+});
+try reg.save(io);
+
+// List
+for (reg.entries.items) |e| {
+    _ = e.name;
+    _ = e.version;
+    _ = e.path;
+}
+
+// Lookup
+if (reg.get("rusty")) |e| {
+    _ = e;
+}
+```
+
+Manifest path: `$PMS_HOME/toolchains/manifest.toml` (schema `# clerk-zig registry v1` + `[[tool]]` tables).
 
 ## Environment
 

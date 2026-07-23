@@ -13,8 +13,15 @@ Zig package that centralizes **solved.gg / iResolved product identity**:
 
 ## Status
 
-**Library in use.** First consumer: **[rusty](../rusty)** (`rusty auth
-login|logout|whoami|status` — CLI branding only; OAuth/store live here).
+**Production-ready library (v0.1.0)** for suite product auth:
+
+- Clerk OAuth PKCE + session store (`zig-libsql` **v0.2.0**)
+- Shared `$PMS_HOME/auth/session.db`
+- Toolchains registry (`$PMS_HOME/toolchains/manifest.toml`)
+
+First consumer: **[rusty](../rusty)** (`rusty auth …`). Other PMs add thin CLIs
+when ready — see [`docs/CONSUMING.md`](docs/CONSUMING.md). Embedded-replica work
+in zig-libsql is **not** required for this package.
 
 ## Build
 
@@ -23,7 +30,7 @@ zig build
 zig build test
 ```
 
-Requires Zig **0.16.x**, Linux, and `zig-libsql` (path dep while developing).
+Requires Zig **0.16.x**, Linux. `zig-libsql` is a tag dependency (v0.2.0).
 
 ## Consume
 

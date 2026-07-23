@@ -31,8 +31,8 @@ split (`~/.rusty`, `~/.hasky`, …), so sessions cannot be shared.
 
 Extract OAuth/PKCE/store/login from rusty into clerk-zig. Session + env keys use
 the shared suite root. Toolchain data remains per-PM under `$PMS_HOME/<pm>/`
-(migration from `~/.rusty` etc. is follow-up). Optional install registry:
-`$PMS_HOME/toolchains/manifest.toml`.
+(migration from `~/.rusty` etc. is follow-up). Install registry (v1, shipped):
+`$PMS_HOME/toolchains/manifest.toml` via `src/registry.zig`.
 
 ## Architecture
 
@@ -46,12 +46,13 @@ the shared suite root. Toolchain data remains per-PM under `$PMS_HOME/<pm>/`
 │  config → pkce → oauth ⇄ Clerk (https issuer)           │
 │           callback + browser                            │
 │           login orchestration                           │
-│           store ──► zig-libsql                          │
+│           store ──► zig-libsql (v0.2.0)                 │
 │           paths ($PMS_HOME)                             │
-│           registry (optional: toolchains manifest)      │
+│           registry (toolchains/manifest.toml)           │
 └───────────────────────────┬─────────────────────────────┘
                             │
               $PMS_HOME/auth/session.db
+              $PMS_HOME/toolchains/manifest.toml
 ```
 
 ### Public surface
@@ -66,7 +67,7 @@ the shared suite root. Toolchain data remains per-PM under `$PMS_HOME/<pm>/`
 | `browser` | Open system browser |
 | `store` | Single-row session CRUD |
 | `login` | Interactive login, logout helpers, token refresh |
-| `registry` | List/register PM installs under suite home (phase 6) |
+| `registry` | List/register PM installs under suite home (`manifest.toml` v1) |
 
 ### Config env
 
@@ -121,11 +122,15 @@ rusty, scripty, hasky, …
 | 3 | store on `$PMS_HOME/auth/session.db` |
 | 4 | login orchestration |
 | 5 | rusty consumer cutover |
-| 6 | registry + thin other-PM CLIs |
+| 6 | registry (shipped) + thin other-PM CLIs (consumer follow-up) |
+
+Production hardening (CI, tag pin, registry, docs): see
+[`docs/superpowers/plans/2026-07-23-auth-stack-production-ready.md`](superpowers/plans/2026-07-23-auth-stack-production-ready.md).
 
 ## Success criteria
 
 - [x] `zig build` / `zig build test` green in clerk-zig
 - [x] rusty has no local OAuth/PKCE/store source
 - [x] Shared session DB path is `$PMS_HOME/auth/session.db`
+- [x] Toolchains registry at `$PMS_HOME/toolchains/manifest.toml`
 - [x] CONSUMING.md accurate for path + tag deps

@@ -5,8 +5,9 @@
 clerk-zig is the **shared Clerk CLI auth adapter** for the PMS suite:
 
 - Public OAuth client + PKCE only (no `CLERK_SECRET_KEY` in this package).
-- Session store: `$PMS_HOME/auth/session.db` via **zig-libsql**.
+- Session store: `$PMS_HOME/auth/session.db` via **zig-libsql v0.2.0** (production pin).
 - Suite root: `$PMS_HOME` (default `~/.pms`), overridable with env `PMS_HOME`.
+- Toolchains registry: `$PMS_HOME/toolchains/manifest.toml` (implemented).
 - Consumers: rusty, scripty, hasky, deploy, and future PMs.
 
 It is **not**:
@@ -28,6 +29,7 @@ It is **not**:
 8. Pass allocators explicitly; tests use `std.testing.allocator` and wire into root `test { }`.
 9. Version strings stay in sync: `build.zig.zon`, `src/root.zig`.
 10. Do not claim completion without `zig build` + `zig build test` evidence.
+11. Do **not** claim production-ready without `zig build test` green **and** CI green.
 
 ## Env contract
 
@@ -47,9 +49,11 @@ It is **not**:
 config → pkce → oauth (HTTP) → callback/browser → login
                       ↓
                    store (zig-libsql @ $PMS_HOME/auth/session.db)
+                      ↓
+                   registry ($PMS_HOME/toolchains/manifest.toml)
 ```
 
-Optional later: `$PMS_HOME/toolchains/manifest.toml` for suite install registry.
+Production dependency: **zig-libsql v0.2.0** (tag pin in `build.zig.zon`).
 
 ## Module layout
 
@@ -64,11 +68,11 @@ Optional later: `$PMS_HOME/toolchains/manifest.toml` for suite install registry.
 | `src/browser.zig` | Open browser |
 | `src/store.zig` | Session DB |
 | `src/login.zig` | Orchestration |
-| `src/registry.zig` | Toolchain install manifest (phase 6) |
+| `src/registry.zig` | Toolchain install manifest (`Registry.load` / `put` / `save` / `entries`) |
 
 ## Working agreement
 
 1. Read `docs/DESIGN.md` before large changes.
-2. Every store/oauth change includes tests run by `zig build test`.
+2. Every store/oauth/registry change includes tests run by `zig build test`.
 3. First consumer cutover is **rusty** (delete `rusty/src/auth` after wire-up).
 4. Match zig-libsql consume patterns (`docs/CONSUMING.md`).

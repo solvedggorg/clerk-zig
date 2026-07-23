@@ -8,7 +8,7 @@ $PMS_HOME/
   auth/
     session.db              # clerk-zig session (0600, DELETE journal)
   toolchains/
-    manifest.toml           # optional: registered PM installs (phase 6)
+    manifest.toml           # clerk-zig registry v1 ([[tool]] schema)
   bin/                      # optional: unified PATH shims (later)
   rusty/                    # migrates from ~/.rusty (per-PM data)
     toolchains/
@@ -26,8 +26,25 @@ $PMS_HOME/
 |------|----------------|
 | `$PMS_HOME` resolution | **clerk-zig** `paths` (shared) |
 | `$PMS_HOME/auth/**` | **clerk-zig** only |
-| `$PMS_HOME/toolchains/manifest.toml` | **clerk-zig** registry API (optional v1.x) |
+| `$PMS_HOME/toolchains/manifest.toml` | **clerk-zig** registry API (v1 schema with `[[tool]]`) |
 | `$PMS_HOME/<pm>/**` | that PM’s own paths module |
+
+### Toolchains manifest (registry v1)
+
+Owned by **clerk-zig** `registry` module. Header comment and tables:
+
+```toml
+# clerk-zig registry v1
+
+[[tool]]
+name = "rusty"
+version = "0.1.0"
+path = "/path/to/install"
+updated_at = 1721600000
+```
+
+API: `clerk.registry.Registry.load` / `put` / `save` / `get` / `remove`; list via
+`reg.entries`. See `docs/CONSUMING.md`.
 
 ## Migration notes
 
@@ -41,5 +58,6 @@ $PMS_HOME/
 ## Security
 
 - `auth/session.db` mode **0600**
+- `toolchains/manifest.toml` mode **0600** (no secrets; install metadata only)
 - No world-readable tokens
 - Prefer `PRAGMA journal_mode=DELETE` (no WAL sidecars)
