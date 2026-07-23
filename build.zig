@@ -24,6 +24,23 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(lib);
 
+    // Brand-neutral store demo (optional consumer skeleton).
+    const example_mod = b.createModule(.{
+        .root_source_file = b.path("examples/whoami.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "clerk_zig", .module = mod },
+        },
+    });
+    const example = b.addExecutable(.{
+        .name = "clerk-whoami",
+        .root_module = example_mod,
+    });
+    const example_install = b.addInstallArtifact(example, .{});
+    const example_step = b.step("example", "Build examples/whoami");
+    example_step.dependOn(&example_install.step);
+
     const tests = b.addTest(.{
         .root_module = mod,
     });
