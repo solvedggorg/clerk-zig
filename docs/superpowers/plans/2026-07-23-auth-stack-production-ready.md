@@ -870,7 +870,7 @@ git commit -m "docs: note clerk-zig v0.1.0 production tag for out-of-tree consum
 
 ### Task 8: Gate checklist (no code)
 
-- [ ] **Step 1: Run the success criteria from the design spec**
+- [x] **Step 1: Run the success criteria from the design spec**
 
 ```bash
 cd /home/awfixer/Projects/pms/zig-libsql && zig build && zig build test
@@ -883,7 +883,7 @@ grep -A3 zig_libsql build.zig.zon
 rg 'pub const registry' src/root.zig
 ```
 
-- [ ] **Step 2: Mark design success criteria** by editing the design spec checkboxes to `[x]` and commit:
+- [x] **Step 2: Mark design success criteria** by editing the design spec checkboxes to `[x]` and commit:
 
 ```bash
 cd /home/awfixer/Projects/pms/clerk-zig
@@ -893,7 +893,7 @@ git commit -m "docs: mark auth stack production gate complete"
 git push origin master
 ```
 
-- [ ] **Step 3: Stop** — do not start unrelated PMS feature work until all boxes pass.
+- [x] **Step 3: Stop** — do not start unrelated PMS feature work until all boxes pass.
 
 ---
 

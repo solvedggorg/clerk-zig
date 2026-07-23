@@ -185,15 +185,15 @@ general TOML library. Round-trip tests required.
 
 ## Success criteria (gate)
 
-- [ ] `cd zig-libsql && zig build && zig build test` green (v0.2.0 / master as pinned)
-- [ ] `cd clerk-zig && zig build && zig build test` green
-- [ ] clerk-zig CI workflow on default branch green
-- [ ] `registry` exported from `root.zig` with tests
-- [ ] clerk-zig `build.zig.zon` pins zig-libsql by **url + hash** on release tag
-- [ ] GitHub release **clerk-zig v0.1.0**
-- [ ] CONSUMING docs describe tag fetch + CLI skeleton; example present
-- [ ] README/AGENTS state: production-ready for PM auth CLIs; replicas not required
-- [ ] No open “path-only production” claim without documenting monorepo exception
+- [x] `cd zig-libsql && zig build && zig build test` green (v0.2.0 / master as pinned)
+- [x] `cd clerk-zig && zig build && zig build test` green
+- [x] clerk-zig CI workflow on default branch green
+- [x] `registry` exported from `root.zig` with tests
+- [x] clerk-zig `build.zig.zon` pins zig-libsql by **url + hash** on release tag
+- [x] GitHub release **clerk-zig v0.1.0**
+- [x] CONSUMING docs describe tag fetch + CLI skeleton; example present
+- [x] README/AGENTS state: production-ready for PM auth CLIs; replicas not required
+- [x] No open “path-only production” claim without documenting monorepo exception
 
 ## Risks
 
