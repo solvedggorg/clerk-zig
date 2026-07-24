@@ -7,7 +7,7 @@
 Pull requests are gated by the **CLA Assistant** GitHub Action
 (`.github/workflows/cla.yml`). External contributors must reply on the PR with:
 
-```
+```text
 I have read the CLA Document and I hereby sign the CLA
 ```
 

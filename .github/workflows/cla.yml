@@ -32,7 +32,7 @@ jobs:
           path-to-signatures: signatures/cla.json
           path-to-document: https://docs.solved.gg/legal/2026-07-04/cla
           branch: master
-          allowlist: bot*,dependabot*,renovate*,github-actions*,graphite-app*,linear[bot],*-bot
+          allowlist: dependabot[bot],renovate[bot],github-actions[bot],graphite-app[bot],linear[bot]
           create-file-commit-message: "chore(cla): create signature storage"
           signed-commit-message: "chore(cla): $contributorName signed the CLA"
           custom-notsigned-prcomment: >-
