@@ -48,4 +48,13 @@ See [`docs/CONSUMING.md`](docs/CONSUMING.md).
 
 ## License
 
-MIT — see `LICENSE`.
+`clerk-zig` uses iResolved’s **dual-class** model (source-available; **not** OSI open source):
+
+| Class | When it applies | Terms |
+| --- | --- | --- |
+| **A — Source Available** | Source trees, forks, evaluation, unofficial builds | [LICENSE.md](LICENSE.md) (iResolved Source Available License v0.1) |
+| **B — Authenticated / commercial** | Active [solved.gg](https://solved.gg) account + official signed builds from [get.solved.gg](https://get.solved.gg) | [EULA](https://docs.solved.gg/legal/2026-07-04/eula) · [Terms](https://docs.solved.gg/legal/2026-07-04/terms) · [Privacy](https://docs.solved.gg/legal/2026-07-04/privacy) |
+
+Class B **supersedes payment / commercial-license-fee** portions of Class A while the account is in good standing; **competition, AI, distribution, and other non-payment restrictions still apply** unless the EULA expressly grants broader rights. See [LICENSE.md §2.3](LICENSE.md).
+
+Contributions require the [CLA](https://docs.solved.gg/legal/2026-07-04/cla). Legal hub: [docs.solved.gg/legal](https://docs.solved.gg/legal/2026-07-04/faq). Commercial: [intake@solved.gg](mailto:intake@solved.gg).
