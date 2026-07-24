@@ -38,8 +38,13 @@ pub const Session = struct {
     pub fn deinit(self: *Session, allocator: std.mem.Allocator) void {
         allocator.free(self.clerk_user_id);
         if (self.email) |e| allocator.free(e);
+        // Owned by getSession; const in the public type so putSession can borrow.
+        std.crypto.secureZero(u8, @constCast(self.access_token));
         allocator.free(self.access_token);
-        if (self.refresh_token) |t| allocator.free(t);
+        if (self.refresh_token) |t| {
+            std.crypto.secureZero(u8, @constCast(t));
+            allocator.free(t);
+        }
         if (self.scopes) |s| allocator.free(s);
         self.* = undefined;
     }
@@ -51,13 +56,21 @@ pub const Store = struct {
     allocator: std.mem.Allocator,
 
     pub fn open(io: Io, allocator: std.mem.Allocator, env: *const Env) Error!Store {
-        // Ensure `$PMS_HOME/auth` exists before creating session.db.
+        // Ensure `$PMS_HOME/auth` exists (mode 0700) before creating session.db.
         const auth_dir = paths.authDir(allocator, env) catch |e| switch (e) {
             error.NoHomeDirectory => return error.NoHomeDirectory,
             error.OutOfMemory => return error.OutOfMemory,
         };
         defer allocator.free(auth_dir);
-        mkdirp(io, auth_dir) catch {};
+        _ = Dir.cwd().createDirPathStatus(io, auth_dir, .fromMode(0o700)) catch |e| {
+            log.err("failed to create auth directory {s}: {s}", .{ auth_dir, @errorName(e) });
+            return error.FilePermissions;
+        };
+        // Fail closed: re-apply 0700 even if the directory already existed.
+        Dir.cwd().setFilePermissions(io, auth_dir, .fromMode(0o700), .{}) catch |e| {
+            log.err("failed to restrict auth directory permissions for {s}: {s}", .{ auth_dir, @errorName(e) });
+            return error.FilePermissions;
+        };
 
         // Ownership of db_path transfers to openPathOwned (frees on all errors).
         const db_path = paths.sessionDbPath(allocator, env) catch |e| switch (e) {
