@@ -126,5 +126,6 @@ jobs:
               exit 1
             fi
           fi
-          ./zig-out/bin/smoke | grep -F "clerk-zig"
+          # smoke prints via std.debug.print (stderr); capture both streams.
+          ./zig-out/bin/smoke 2>&1 | grep -F "clerk-zig"
           rm -rf "$SMOKE"
