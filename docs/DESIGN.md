@@ -46,7 +46,7 @@ the shared suite root. Toolchain data remains per-PM under `$PMS_HOME/<pm>/`
 │  config → pkce → oauth ⇄ Clerk (https issuer)           │
 │           callback + browser                            │
 │           login orchestration                           │
-│           store ──► zig-libsql (v0.2.0)                 │
+│           store ──► zig-libsql (v0.2.1)                 │
 │           paths ($PMS_HOME)                             │
 │           registry (toolchains/manifest.toml)           │
 └───────────────────────────┬─────────────────────────────┘
