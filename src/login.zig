@@ -15,6 +15,7 @@ pub const Error = error{
     StateMismatch,
     BrowserFailed,
     NoSpaceLeft,
+    Timeout,
 } || oauth.Error || callback.Error || store_mod.Error;
 
 pub const LoginResult = struct {
@@ -29,12 +30,25 @@ pub const LoginResult = struct {
 };
 
 /// Run the interactive login flow. Writes session to `$PMS_HOME/auth/session.db`.
+/// Browser callback wait uses `callback.default_wait_timeout` (5 minutes).
 pub fn run(
     io: Io,
     allocator: std.mem.Allocator,
     env: *const Env,
     out: *Io.Writer,
     err: *Io.Writer,
+) Error!LoginResult {
+    return runWithTimeout(io, allocator, env, out, err, callback.default_wait_timeout);
+}
+
+/// Same as `run` with an explicit callback wait timeout (`.none` = unlimited).
+pub fn runWithTimeout(
+    io: Io,
+    allocator: std.mem.Allocator,
+    env: *const Env,
+    out: *Io.Writer,
+    err: *Io.Writer,
+    wait_timeout: Io.Timeout,
 ) Error!LoginResult {
     const cfg = config_mod.Config.fromEnv(env) orelse {
         try err.writeAll(
@@ -69,10 +83,16 @@ pub fn run(
     try out.writeAll("Waiting for authorization in the browser…\n");
     try out.flush();
 
-    var cb = try listener.wait(allocator);
+    var cb = listener.wait(allocator, wait_timeout) catch |e| switch (e) {
+        error.Timeout => {
+            try err.writeAll("product auth: timed out waiting for browser callback\n");
+            return error.Timeout;
+        },
+        else => |other| return other,
+    };
     defer cb.deinit(allocator);
 
-    if (!std.mem.eql(u8, cb.state, &pair.state)) {
+    if (!stateMatches(cb.state, &pair.state)) {
         try err.writeAll("product auth: OAuth state mismatch (possible CSRF); try again\n");
         return error.StateMismatch;
     }
@@ -81,10 +101,14 @@ pub fn run(
     const code = try percentDecodeAlloc(allocator, cb.code);
     defer allocator.free(code);
 
-    var tokens = try oauth.exchangeCode(io, allocator, cfg, code, redirect_uri, &pair.verifier);
+    // One HTTP client for token exchange + userinfo (fewer TLS handshakes).
+    var client: std.http.Client = .{ .allocator = allocator, .io = io };
+    defer client.deinit();
+
+    var tokens = try oauth.exchangeCodeClient(&client, allocator, cfg, code, redirect_uri, &pair.verifier);
     defer tokens.deinit(allocator);
 
-    var info = try oauth.userInfo(io, allocator, cfg, tokens.access_token);
+    var info = try oauth.userInfoClient(&client, allocator, cfg, tokens.access_token);
     defer info.deinit(allocator);
 
     const now: i64 = Io.Clock.real.now(io).toSeconds();
@@ -102,9 +126,12 @@ pub fn run(
         .updated_at = now,
     });
 
+    const email_owned: ?[]u8 = if (info.email) |e| try allocator.dupe(u8, e) else null;
+    errdefer if (email_owned) |e| allocator.free(e);
+    const user_owned = try allocator.dupe(u8, info.sub);
     return .{
-        .email = if (info.email) |e| try allocator.dupe(u8, e) else null,
-        .clerk_user_id = try allocator.dupe(u8, info.sub),
+        .email = email_owned,
+        .clerk_user_id = user_owned,
     };
 }
 
@@ -171,6 +198,14 @@ pub fn ensureAccessToken(
     return try allocator.dupe(u8, tokens.access_token);
 }
 
+/// Constant-time compare of OAuth CSRF state (fixed-length base64url).
+fn stateMatches(got: []const u8, expected: *const [pkce.b64UrlLen(pkce.state_bytes)]u8) bool {
+    if (got.len != expected.len) return false;
+    var got_arr: [pkce.b64UrlLen(pkce.state_bytes)]u8 = undefined;
+    @memcpy(&got_arr, got);
+    return std.crypto.timing_safe.eql([pkce.b64UrlLen(pkce.state_bytes)]u8, got_arr, expected.*);
+}
+
 fn percentDecodeAlloc(allocator: std.mem.Allocator, input: []const u8) error{OutOfMemory}![]u8 {
     var list: std.ArrayList(u8) = .empty;
     errdefer list.deinit(allocator);
@@ -200,4 +235,24 @@ test "percentDecodeAlloc" {
     const d = try percentDecodeAlloc(gpa, "a%2Fb+c");
     defer gpa.free(d);
     try std.testing.expectEqualStrings("a/b c", d);
+}
+
+test "percentDecodeAlloc OOM is clean" {
+    const gpa = std.testing.allocator;
+    try std.testing.checkAllAllocationFailures(gpa, struct {
+        fn impl(allocator: std.mem.Allocator) !void {
+            const d = try percentDecodeAlloc(allocator, "a%2Fb+c%20d%2Fe");
+            defer allocator.free(d);
+        }
+    }.impl, .{});
+}
+
+test "stateMatches rejects wrong length and value" {
+    var expected: [pkce.b64UrlLen(pkce.state_bytes)]u8 = undefined;
+    @memset(&expected, 'A');
+    try std.testing.expect(!stateMatches("short", &expected));
+    try std.testing.expect(stateMatches(&expected, &expected));
+    var wrong = expected;
+    wrong[0] = 'B';
+    try std.testing.expect(!stateMatches(&wrong, &expected));
 }

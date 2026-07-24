@@ -3,6 +3,9 @@
 //! Always launches via `xdg-open`, which exits quickly and consults `$BROWSER`
 //! from the process environment. Waiting on a long-lived browser binary would
 //! block the OAuth callback listener.
+//!
+//! Integration-only: unit tests do not invoke a real browser. Callers should
+//! already restrict authorize URLs to `https://` via `config.Config.fromEnv`.
 
 const std = @import("std");
 const Io = std.Io;
