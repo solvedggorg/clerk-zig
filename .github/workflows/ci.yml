@@ -126,5 +126,7 @@ jobs:
               exit 1
             fi
           fi
-          ./zig-out/bin/smoke | grep -F "clerk-zig"
+          # clerk.version is emitted via std.debug.print, which Zig writes to
+          # stderr, so fold stderr into the pipe for the grep assertion.
+          ./zig-out/bin/smoke 2>&1 | grep -F "clerk-zig"
           rm -rf "$SMOKE"
