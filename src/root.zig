@@ -1,7 +1,23 @@
 //! clerk-zig — shared Clerk CLI auth for the PMS suite.
 //!
-//! Public OAuth client + PKCE, session store under `$PMS_HOME/auth/session.db`.
-//! See docs/DESIGN.md. Linux only.
+//! Public OAuth client + PKCE only (no secret key). Session store:
+//! `$PMS_HOME/auth/session.db` via zig-libsql. Linux only.
+//!
+//! ## Public modules
+//!
+//! | Module | Role |
+//! |--------|------|
+//! | `paths` | `$PMS_HOME` and auth/toolchain paths (caller owns slices) |
+//! | `config` | Env → OAuth config (`PMS_AUTH_*`, legacy `RUSTY_AUTH_*`) |
+//! | `pkce` | Verifier / S256 challenge / CSRF state |
+//! | `oauth` | Authorize URL, token exchange, refresh, revoke, userinfo |
+//! | `callback` | Loopback OAuth redirect listener |
+//! | `browser` | Open system browser (`xdg-open`) |
+//! | `store` | Single-row session CRUD (file mode 0600, journal DELETE) |
+//! | `login` | Interactive login / logout / token refresh orchestration |
+//! | `registry` | Toolchain install manifest (`manifest.toml`) |
+//!
+//! **Never log tokens** or URLs that embed secrets. See `docs/DESIGN.md`.
 
 const std = @import("std");
 const builtin = @import("builtin");

@@ -61,10 +61,21 @@ const cfg = clerk.config.Config.fromEnv(env) orelse return error.NotConfigured;
 var store = try clerk.store.Store.open(io, allocator, env);
 defer store.close();
 
-// Login orchestration
+// Login orchestration (browser callback waits up to 5 minutes by default)
 var result = try clerk.login.run(io, allocator, env, out, err);
 defer result.deinit(allocator);
+
+// Optional: custom callback timeout
+// var result = try clerk.login.runWithTimeout(io, allocator, env, out, err, .{
+//     .duration = .{ .raw = .fromSeconds(120), .clock = .real },
+// });
 ```
+
+Ownership: returned slices from `paths.*`, `oauth.authorizeUrl`, `login.run`,
+`store.getSession`, and token helpers are **caller-owned** — free with the
+allocator you passed (or call the type's `deinit`).
+
+**Never log** access/refresh tokens or authorize URLs that might embed secrets.
 
 Module name: **`clerk_zig`**. Package name in `build.zig.zon`: **`clerk_zig`**.
 
