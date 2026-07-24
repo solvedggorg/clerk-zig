@@ -5,6 +5,8 @@ const Io = std.Io;
 const config_mod = @import("config.zig");
 const Config = config_mod.Config;
 
+const log = std.log.scoped(.oauth);
+
 pub const TokenSet = struct {
     access_token: []u8,
     refresh_token: ?[]u8,
@@ -12,8 +14,12 @@ pub const TokenSet = struct {
     scope: ?[]u8,
 
     pub fn deinit(self: *TokenSet, allocator: std.mem.Allocator) void {
+        std.crypto.secureZero(u8, self.access_token);
         allocator.free(self.access_token);
-        if (self.refresh_token) |t| allocator.free(t);
+        if (self.refresh_token) |t| {
+            std.crypto.secureZero(u8, t);
+            allocator.free(t);
+        }
         if (self.scope) |s| allocator.free(s);
         self.* = undefined;
     }
@@ -28,6 +34,11 @@ pub const UserInfo = struct {
         if (self.email) |e| allocator.free(e);
         self.* = undefined;
     }
+};
+
+/// HTTP failure with status for diagnostics (never log response bodies that may embed tokens).
+pub const HttpStatus = struct {
+    status: u16,
 };
 
 pub const Error = error{
@@ -71,7 +82,20 @@ pub fn exchangeCode(
     redirect_uri: []const u8,
     code_verifier: []const u8,
 ) Error!TokenSet {
-    return try postForm(io, allocator, cfg, "/oauth/token", &.{
+    var client = makeClient(io, allocator);
+    defer client.deinit();
+    return try exchangeCodeClient(&client, allocator, cfg, code, redirect_uri, code_verifier);
+}
+
+pub fn exchangeCodeClient(
+    client: *std.http.Client,
+    allocator: std.mem.Allocator,
+    cfg: Config,
+    code: []const u8,
+    redirect_uri: []const u8,
+    code_verifier: []const u8,
+) Error!TokenSet {
+    return try postFormToken(client, allocator, cfg, "/oauth/token", &.{
         .{ .k = "grant_type", .v = "authorization_code" },
         .{ .k = "code", .v = code },
         .{ .k = "redirect_uri", .v = redirect_uri },
@@ -86,7 +110,18 @@ pub fn refresh(
     cfg: Config,
     refresh_token: []const u8,
 ) Error!TokenSet {
-    return try postForm(io, allocator, cfg, "/oauth/token", &.{
+    var client = makeClient(io, allocator);
+    defer client.deinit();
+    return try refreshClient(&client, allocator, cfg, refresh_token);
+}
+
+pub fn refreshClient(
+    client: *std.http.Client,
+    allocator: std.mem.Allocator,
+    cfg: Config,
+    refresh_token: []const u8,
+) Error!TokenSet {
+    return try postFormToken(client, allocator, cfg, "/oauth/token", &.{
         .{ .k = "grant_type", .v = "refresh_token" },
         .{ .k = "refresh_token", .v = refresh_token },
         .{ .k = "client_id", .v = cfg.client_id },
@@ -100,15 +135,41 @@ pub fn revoke(
     cfg: Config,
     token: []const u8,
 ) void {
-    var dummy = postForm(io, allocator, cfg, "/oauth/revoke", &.{
+    var client = makeClient(io, allocator);
+    defer client.deinit();
+    revokeClient(&client, allocator, cfg, token);
+}
+
+pub fn revokeClient(
+    client: *std.http.Client,
+    allocator: std.mem.Allocator,
+    cfg: Config,
+    token: []const u8,
+) void {
+    const resp = postFormRaw(client, allocator, cfg, "/oauth/revoke", &.{
         .{ .k = "token", .v = token },
         .{ .k = "client_id", .v = cfg.client_id },
-    }) catch return;
-    dummy.deinit(allocator);
+    }) catch |e| {
+        log.debug("revoke request failed: {s}", .{@errorName(e)});
+        return;
+    };
+    // Response body is unused, but caller-owned; free it.
+    allocator.free(resp);
 }
 
 pub fn userInfo(
     io: Io,
+    allocator: std.mem.Allocator,
+    cfg: Config,
+    access_token: []const u8,
+) Error!UserInfo {
+    var client = makeClient(io, allocator);
+    defer client.deinit();
+    return try userInfoClient(&client, allocator, cfg, access_token);
+}
+
+pub fn userInfoClient(
+    client: *std.http.Client,
     allocator: std.mem.Allocator,
     cfg: Config,
     access_token: []const u8,
@@ -119,7 +180,7 @@ pub fn userInfo(
     const auth_header = try std.fmt.allocPrint(allocator, "Bearer {s}", .{access_token});
     defer allocator.free(auth_header);
 
-    const body = try fetchBytes(io, allocator, .{
+    const body = try fetchBytes(client, allocator, .{
         .url = url,
         .method = .GET,
         .payload = null,
@@ -133,15 +194,31 @@ pub fn userInfo(
     return try parseUserInfo(allocator, body);
 }
 
+fn makeClient(io: Io, allocator: std.mem.Allocator) std.http.Client {
+    return .{ .allocator = allocator, .io = io };
+}
+
 const FormField = struct { k: []const u8, v: []const u8 };
 
-fn postForm(
-    io: Io,
+fn postFormToken(
+    client: *std.http.Client,
     allocator: std.mem.Allocator,
     cfg: Config,
     path: []const u8,
     fields: []const FormField,
 ) Error!TokenSet {
+    const resp = try postFormRaw(client, allocator, cfg, path, fields);
+    defer allocator.free(resp);
+    return try parseTokenSet(allocator, resp);
+}
+
+fn postFormRaw(
+    client: *std.http.Client,
+    allocator: std.mem.Allocator,
+    cfg: Config,
+    path: []const u8,
+    fields: []const FormField,
+) Error![]u8 {
     const url = try std.fmt.allocPrint(allocator, "{s}{s}", .{ cfg.issuer, path });
     defer allocator.free(url);
 
@@ -155,7 +232,7 @@ fn postForm(
     }
     const payload = body_list.items;
 
-    const resp = try fetchBytes(io, allocator, .{
+    return try fetchBytes(client, allocator, .{
         .url = url,
         .method = .POST,
         .payload = payload,
@@ -164,19 +241,6 @@ fn postForm(
             .{ .name = "Accept", .value = "application/json" },
         },
     });
-    defer allocator.free(resp);
-
-    // Revoke may return empty body / non-token JSON.
-    if (std.mem.eql(u8, path, "/oauth/revoke")) {
-        return .{
-            .access_token = try allocator.dupe(u8, ""),
-            .refresh_token = null,
-            .expires_in = 0,
-            .scope = null,
-        };
-    }
-
-    return try parseTokenSet(allocator, resp);
 }
 
 const FetchOpts = struct {
@@ -186,10 +250,7 @@ const FetchOpts = struct {
     extra_headers: []const std.http.Header,
 };
 
-fn fetchBytes(io: Io, allocator: std.mem.Allocator, opts: FetchOpts) Error![]u8 {
-    var client: std.http.Client = .{ .allocator = allocator, .io = io };
-    defer client.deinit();
-
+fn fetchBytes(client: *std.http.Client, allocator: std.mem.Allocator, opts: FetchOpts) Error![]u8 {
     var aw: std.Io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
 
@@ -201,31 +262,36 @@ fn fetchBytes(io: Io, allocator: std.mem.Allocator, opts: FetchOpts) Error![]u8 
         .response_writer = &aw.writer,
     });
     const status: u16 = @intFromEnum(result.status);
-    if (status >= 400) return error.HttpStatusError;
+    if (status >= 400) {
+        // Log status only — body may contain sensitive OAuth error detail near tokens.
+        log.err("HTTP {d} from OAuth endpoint", .{status});
+        return error.HttpStatusError;
+    }
     return try aw.toOwnedSlice();
 }
 
+const TokenResponse = struct {
+    access_token: []const u8,
+    refresh_token: ?[]const u8 = null,
+    expires_in: ?std.json.Value = null,
+    scope: ?[]const u8 = null,
+};
+
 fn parseTokenSet(allocator: std.mem.Allocator, body: []const u8) Error!TokenSet {
-    const parsed = std.json.parseFromSlice(std.json.Value, allocator, body, .{}) catch return error.InvalidTokenResponse;
+    const parsed = std.json.parseFromSlice(TokenResponse, allocator, body, .{
+        .ignore_unknown_fields = true,
+        .allocate = .alloc_always,
+    }) catch |e| switch (e) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.InvalidTokenResponse,
+    };
     defer parsed.deinit();
-    const obj = switch (parsed.value) {
-        .object => |o| o,
-        else => return error.InvalidTokenResponse,
-    };
-    const access = obj.get("access_token") orelse return error.InvalidTokenResponse;
-    const access_s = switch (access) {
-        .string => |s| s,
-        else => return error.InvalidTokenResponse,
-    };
-    const refresh_s: ?[]const u8 = blk: {
-        const r = obj.get("refresh_token") orelse break :blk null;
-        break :blk switch (r) {
-            .string => |s| s,
-            else => null,
-        };
-    };
+    const tr = parsed.value;
+
+    if (tr.access_token.len == 0) return error.InvalidTokenResponse;
+
     const expires: i64 = blk: {
-        const e = obj.get("expires_in") orelse break :blk 3600;
+        const e = tr.expires_in orelse break :blk 3600;
         break :blk switch (e) {
             .integer => |i| i,
             .float => |f| {
@@ -233,23 +299,22 @@ fn parseTokenSet(allocator: std.mem.Allocator, body: []const u8) Error!TokenSet 
                 if (f < 0 or f > @as(f64, @floatFromInt(std.math.maxInt(i64)))) return error.InvalidTokenResponse;
                 break :blk @intFromFloat(f);
             },
+            .string => |s| std.fmt.parseInt(i64, s, 10) catch return error.InvalidTokenResponse,
             else => 3600,
         };
     };
-    const scope_s: ?[]const u8 = blk: {
-        const s = obj.get("scope") orelse break :blk null;
-        break :blk switch (s) {
-            .string => |x| x,
-            else => null,
-        };
-    };
 
-    const access_token = try allocator.dupe(u8, access_s);
-    errdefer allocator.free(access_token);
-    const refresh_token: ?[]u8 = if (refresh_s) |r| try allocator.dupe(u8, r) else null;
-    errdefer if (refresh_token) |t| allocator.free(t);
-    const scope: ?[]u8 = if (scope_s) |s| try allocator.dupe(u8, s) else null;
-    // last dupe: no further allocation after this; caller owns on success
+    const access_token = try allocator.dupe(u8, tr.access_token);
+    errdefer {
+        std.crypto.secureZero(u8, access_token);
+        allocator.free(access_token);
+    }
+    const refresh_token: ?[]u8 = if (tr.refresh_token) |r| try allocator.dupe(u8, r) else null;
+    errdefer if (refresh_token) |t| {
+        std.crypto.secureZero(u8, t);
+        allocator.free(t);
+    };
+    const scope: ?[]u8 = if (tr.scope) |s| try allocator.dupe(u8, s) else null;
 
     return .{
         .access_token = access_token,
@@ -259,29 +324,26 @@ fn parseTokenSet(allocator: std.mem.Allocator, body: []const u8) Error!TokenSet 
     };
 }
 
+const UserInfoResponse = struct {
+    sub: []const u8,
+    email: ?[]const u8 = null,
+};
+
 fn parseUserInfo(allocator: std.mem.Allocator, body: []const u8) Error!UserInfo {
-    const parsed = std.json.parseFromSlice(std.json.Value, allocator, body, .{}) catch return error.InvalidUserInfo;
+    const parsed = std.json.parseFromSlice(UserInfoResponse, allocator, body, .{
+        .ignore_unknown_fields = true,
+        .allocate = .alloc_always,
+    }) catch |e| switch (e) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.InvalidUserInfo,
+    };
     defer parsed.deinit();
-    const obj = switch (parsed.value) {
-        .object => |o| o,
-        else => return error.InvalidUserInfo,
-    };
-    const sub_v = obj.get("sub") orelse return error.InvalidUserInfo;
-    const sub = switch (sub_v) {
-        .string => |s| s,
-        else => return error.InvalidUserInfo,
-    };
-    const email_s: ?[]const u8 = blk: {
-        const e = obj.get("email") orelse break :blk null;
-        break :blk switch (e) {
-            .string => |s| s,
-            else => null,
-        };
-    };
-    const sub_owned = try allocator.dupe(u8, sub);
+    const ui = parsed.value;
+    if (ui.sub.len == 0) return error.InvalidUserInfo;
+
+    const sub_owned = try allocator.dupe(u8, ui.sub);
     errdefer allocator.free(sub_owned);
-    const email: ?[]u8 = if (email_s) |e| try allocator.dupe(u8, e) else null;
-    // last dupe: no further allocation after this; caller owns on success
+    const email: ?[]u8 = if (ui.email) |e| try allocator.dupe(u8, e) else null;
 
     return .{
         .sub = sub_owned,
@@ -333,6 +395,18 @@ test "parseTokenSet extracts fields" {
     try std.testing.expectEqual(@as(i64, 120), ts.expires_in);
 }
 
+test "parseTokenSet rejects missing access_token" {
+    const gpa = std.testing.allocator;
+    try std.testing.expectError(error.InvalidTokenResponse, parseTokenSet(gpa,
+        \\{"refresh_token":"r"}
+    ));
+}
+
+test "parseTokenSet rejects non-object" {
+    const gpa = std.testing.allocator;
+    try std.testing.expectError(error.InvalidTokenResponse, parseTokenSet(gpa, "[]"));
+}
+
 test "parseUserInfo extracts sub and email" {
     const gpa = std.testing.allocator;
     var ui = try parseUserInfo(gpa,
@@ -341,4 +415,50 @@ test "parseUserInfo extracts sub and email" {
     defer ui.deinit(gpa);
     try std.testing.expectEqualStrings("user_1", ui.sub);
     try std.testing.expectEqualStrings("a@b.co", ui.email.?);
+}
+
+test "parseUserInfo rejects missing sub" {
+    const gpa = std.testing.allocator;
+    try std.testing.expectError(error.InvalidUserInfo, parseUserInfo(gpa,
+        \\{"email":"a@b.co"}
+    ));
+}
+
+test "authorizeUrl OOM is clean under checkAllAllocationFailures" {
+    const gpa = std.testing.allocator;
+    try std.testing.checkAllAllocationFailures(gpa, struct {
+        fn impl(allocator: std.mem.Allocator) !void {
+            const url = authorizeUrl(allocator, .{
+                .issuer = "https://clerk.example.com",
+                .client_id = "c",
+                .scopes = "s",
+            }, "http://127.0.0.1:1/callback", "chal", "st") catch |e| switch (e) {
+                error.OutOfMemory => return error.OutOfMemory,
+            };
+            defer allocator.free(url);
+        }
+    }.impl, .{});
+}
+
+test "parseTokenSet OOM is clean under checkAllAllocationFailures" {
+    const gpa = std.testing.allocator;
+    try std.testing.checkAllAllocationFailures(gpa, struct {
+        fn impl(allocator: std.mem.Allocator) !void {
+            var ts = parseTokenSet(allocator,
+                \\{"access_token":"a","refresh_token":"r","expires_in":1,"scope":"s"}
+            ) catch |e| switch (e) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => return e,
+            };
+            defer ts.deinit(allocator);
+        }
+    }.impl, .{});
+}
+
+test "appendQuery encodes reserved characters" {
+    const gpa = std.testing.allocator;
+    var list: std.ArrayList(u8) = .empty;
+    defer list.deinit(gpa);
+    try appendQuery(gpa, &list, "a b/c");
+    try std.testing.expectEqualStrings("a+b%2Fc", list.items);
 }
