@@ -6,7 +6,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-pub const version = "0.1.0";
+pub const version = "0.1.1";
 
 pub const paths = @import("paths.zig");
 pub const config = @import("config.zig");

@@ -1,12 +1,12 @@
 .{
     .name = .clerk_zig,
-    .version = "0.1.0",
+    .version = "0.1.1",
     .fingerprint = 0xd8c443889ae04b73, // Changing this has security and trust implications.
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .zig_libsql = .{
-            .url = "https://github.com/solvedggorg/zig-libsql/archive/refs/tags/v0.2.0.tar.gz",
-            .hash = "zig_libsql-0.2.0-sj_Iy0O3mgCdfdzNPtpRS4DXhuY-ZXYSSHRrGV2mYDxj",
+            .url = "https://github.com/solvedggorg/zig-libsql/archive/refs/tags/v0.2.1.tar.gz",
+            .hash = "zig_libsql-0.2.1-sj_Iy2e-mgAOBGUwHMCGUBEXsx4293L9UEBHyS4-8yIT",
         },
     },
     .paths = .{

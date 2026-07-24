@@ -5,7 +5,7 @@
 clerk-zig is the **shared Clerk CLI auth adapter** for the PMS suite:
 
 - Public OAuth client + PKCE only (no `CLERK_SECRET_KEY` in this package).
-- Session store: `$PMS_HOME/auth/session.db` via **zig-libsql v0.2.0** (production pin).
+- Session store: `$PMS_HOME/auth/session.db` via **zig-libsql v0.2.1** (production pin).
 - Suite root: `$PMS_HOME` (default `~/.pms`), overridable with env `PMS_HOME`.
 - Toolchains registry: `$PMS_HOME/toolchains/manifest.toml` (implemented).
 - Consumers: rusty, scripty, hasky, deploy, and future PMs.
@@ -53,7 +53,7 @@ config → pkce → oauth (HTTP) → callback/browser → login
                    registry ($PMS_HOME/toolchains/manifest.toml)
 ```
 
-Production dependency: **zig-libsql v0.2.0** (tag pin in `build.zig.zon`).
+Production dependency: **zig-libsql v0.2.1** (tag pin in `build.zig.zon`).
 
 ## Module layout
 

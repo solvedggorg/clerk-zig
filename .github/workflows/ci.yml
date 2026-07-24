@@ -51,3 +51,80 @@ jobs:
           zig build
           zig build test
           zig build example
+
+  consumer-smoke:
+    name: path-dep consumer smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Zig
+        uses: ./.github/actions/setup-zig
+        with:
+          zig-version: ${{ env.ZIG_VERSION }}
+      - name: Consumer project builds against this tree
+        run: |
+          set -euo pipefail
+          SMOKE="${GITHUB_WORKSPACE}/../clerk-zig-consumer-smoke"
+          rm -rf "$SMOKE"
+          mkdir -p "$SMOKE/src"
+          PKG_BASENAME="$(basename "${GITHUB_WORKSPACE}")"
+          cat > "$SMOKE/build.zig.zon" <<EOF
+          .{
+              .name = .clerk_smoke,
+              .version = "0.0.0",
+              .fingerprint = 0xa3bf7439dd1193a5,
+              .minimum_zig_version = "0.16.0",
+              .dependencies = .{
+                  .clerk_zig = .{ .path = "../${PKG_BASENAME}" },
+              },
+              .paths = .{ "build.zig", "build.zig.zon", "src" },
+          }
+          EOF
+          sed -i 's/^[[:space:]]*//' "$SMOKE/build.zig.zon"
+          cat > "$SMOKE/build.zig" <<'EOF'
+          const std = @import("std");
+          pub fn build(b: *std.Build) void {
+              const target = b.standardTargetOptions(.{});
+              const optimize = b.standardOptimizeOption(.{});
+              const clerk = b.dependency("clerk_zig", .{
+                  .target = target,
+                  .optimize = optimize,
+              });
+              const root = b.createModule(.{
+                  .root_source_file = b.path("src/main.zig"),
+                  .target = target,
+                  .optimize = optimize,
+                  .imports = &.{
+                      .{ .name = "clerk_zig", .module = clerk.module("clerk_zig") },
+                  },
+              });
+              const exe = b.addExecutable(.{ .name = "smoke", .root_module = root });
+              b.installArtifact(exe);
+          }
+          EOF
+          sed -i 's/^[[:space:]]*//' "$SMOKE/build.zig"
+          cat > "$SMOKE/src/main.zig" <<'EOF'
+          const std = @import("std");
+          const clerk = @import("clerk_zig");
+          pub fn main() !void {
+              std.debug.print("clerk-zig {s}\n", .{clerk.version});
+          }
+          EOF
+          sed -i 's/^[[:space:]]*//' "$SMOKE/src/main.zig"
+          # Fingerprint is name-dependent; fix if Zig rejects.
+          cd "$SMOKE"
+          if ! zig build 2>build.err; then
+            if grep -q 'invalid fingerprint' build.err; then
+              SUGGESTED=$(grep -oE '0x[0-9a-f]+' build.err | tail -1)
+              sed -i "s/fingerprint = 0x[0-9a-f]*/fingerprint = ${SUGGESTED}/" build.zig.zon
+              zig build
+            else
+              cat build.err >&2
+              exit 1
+            fi
+          fi
+          ./zig-out/bin/smoke | grep -F "clerk-zig"
+          rm -rf "$SMOKE"

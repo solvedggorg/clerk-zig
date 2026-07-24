@@ -12,7 +12,7 @@ How product toolchains (rusty, scripty, hasky, …) depend on this package.
 ## Production (tag fetch)
 
 ```sh
-zig fetch --save https://github.com/solvedggorg/clerk-zig/archive/refs/tags/v0.1.0.tar.gz
+zig fetch --save https://github.com/solvedggorg/clerk-zig/archive/refs/tags/v0.1.1.tar.gz
 ```
 
 ```zig
@@ -22,6 +22,8 @@ const clerk = b.dependency("clerk_zig", .{
     .optimize = optimize,
 });
 mod.addImport("clerk_zig", clerk.module("clerk_zig"));
+// Transitive zig-libsql (v0.2.1) is pulled automatically for the session store.
+// Depend on zig_libsql yourself only if you @import it directly.
 ```
 
 ## Local path (development only)

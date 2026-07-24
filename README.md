@@ -13,9 +13,9 @@ Zig package that centralizes **solved.gg / iResolved product identity**:
 
 ## Status
 
-**Production-ready library (v0.1.0)** for suite product auth:
+**Production-ready library (v0.1.1)** for suite product auth:
 
-- Clerk OAuth PKCE + session store (`zig-libsql` **v0.2.0**)
+- Clerk OAuth PKCE + session store (`zig-libsql` **v0.2.1**)
 - Shared `$PMS_HOME/auth/session.db`
 - Toolchains registry (`$PMS_HOME/toolchains/manifest.toml`)
 
@@ -30,7 +30,7 @@ zig build
 zig build test
 ```
 
-Requires Zig **0.16.x**, Linux. `zig-libsql` is a tag dependency (v0.2.0).
+Requires Zig **0.16.x**, Linux. `zig-libsql` is a tag dependency (v0.2.1).
 
 ## Consume
 

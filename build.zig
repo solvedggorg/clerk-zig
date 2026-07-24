@@ -4,25 +4,32 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Primary contract: module `clerk_zig` for `b.dependency` + `addImport`.
     const mod = b.addModule("clerk_zig", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    // Session store (Task 3). Path dep for monorepo development.
+    // Production pin: zig-libsql tag in build.zig.zon (not a monorepo path).
     const libsql = b.dependency("zig_libsql", .{
         .target = target,
         .optimize = optimize,
     });
     mod.addImport("zig_libsql", libsql.module("zig_libsql"));
 
+    // Optional static library install for non-module consumers; most PMs only
+    // need the module via addImport.
     const lib = b.addLibrary(.{
         .name = "clerk_zig",
         .root_module = mod,
         .linkage = .static,
     });
-    b.installArtifact(lib);
+    const install_lib = b.addInstallArtifact(lib, .{});
+    const lib_step = b.step("lib", "Install static library artifact");
+    lib_step.dependOn(&install_lib.step);
+    // Default `zig build` still installs the lib for local discoverability.
+    b.getInstallStep().dependOn(&install_lib.step);
 
     // Brand-neutral store demo (optional consumer skeleton).
     const example_mod = b.createModule(.{
