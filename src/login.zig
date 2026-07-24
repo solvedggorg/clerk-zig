@@ -53,7 +53,8 @@ pub fn run(
     var uri_buf: [64]u8 = undefined;
     const redirect_uri = try listener.redirectUri(&uri_buf);
 
-    const pair = pkce.generate(io);
+    var pair = pkce.generate(io);
+    defer pkce.wipe(&pair);
     const auth_url = try oauth.authorizeUrl(allocator, cfg, redirect_uri, &pair.challenge, &pair.state);
     defer allocator.free(auth_url);
 
