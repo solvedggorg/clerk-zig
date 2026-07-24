@@ -143,6 +143,6 @@ jobs:
               exit 1
             fi
           fi
-          # smoke prints via std.debug.print (stderr); fold it into the pipe.
+          # smoke prints via std.debug.print (stderr); capture both streams so grep sees the version.
           ./zig-out/bin/smoke 2>&1 | grep -F "clerk-zig"
           rm -rf "$SMOKE"
