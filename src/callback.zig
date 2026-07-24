@@ -151,8 +151,9 @@ pub const Listener = struct {
         };
 
         var fut = Io.concurrent(self.io, AcceptTask.run, .{ self, &shared }) catch {
-            // No concurrency available: block without deadline.
-            return self.server.accept(self.io) catch return error.AcceptFailed;
+            // A deadline was requested but we cannot honor it without
+            // concurrency; fail instead of silently blocking forever.
+            return error.AcceptFailed;
         };
 
         // Wait until ready or timeout. Spurious wakeups re-check the flag.
