@@ -45,7 +45,6 @@ pub fn wipe(pair: *Pair) void {
     std.crypto.secureZero(u8, &pair.verifier);
     std.crypto.secureZero(u8, &pair.challenge);
     std.crypto.secureZero(u8, &pair.state);
-    pair.* = undefined;
 }
 
 test "pkce generate shapes and challenge is S256 of verifier" {
