@@ -90,3 +90,27 @@ test "fromEnv rejects non-https issuers" {
     try env.put("PMS_AUTH_ISSUER", "http://insecure.example.com");
     try std.testing.expect(Config.fromEnv(&env) == null);
 }
+
+test "fromEnv rejects empty issuer and whitespace-only client" {
+    const gpa = std.testing.allocator;
+    var env = Env.init(gpa);
+    defer env.deinit();
+    try env.put("PMS_AUTH_CLIENT_ID", "   ");
+    try env.put("PMS_AUTH_ISSUER", "https://clerk.example.com");
+    try std.testing.expect(Config.fromEnv(&env) == null);
+
+    try env.put("PMS_AUTH_CLIENT_ID", "ok");
+    try env.put("PMS_AUTH_ISSUER", "   ");
+    try std.testing.expect(Config.fromEnv(&env) == null);
+}
+
+test "fromEnv empty scopes falls back to default" {
+    const gpa = std.testing.allocator;
+    var env = Env.init(gpa);
+    defer env.deinit();
+    try env.put("PMS_AUTH_CLIENT_ID", "c");
+    try env.put("PMS_AUTH_ISSUER", "https://clerk.example.com");
+    try env.put("PMS_AUTH_SCOPES", "   ");
+    const cfg = Config.fromEnv(&env).?;
+    try std.testing.expectEqualStrings(default_scopes, cfg.scopes);
+}
