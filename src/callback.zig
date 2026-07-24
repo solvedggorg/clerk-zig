@@ -184,10 +184,12 @@ pub const Listener = struct {
 
         _ = fut.await(self.io);
         if (shared.stream) |s| return s;
-        if (shared.err) |e| switch (e) {
-            error.SocketNotListening, error.Canceled => return error.Timeout,
-            else => return error.AcceptFailed,
-        };
+        // Reaching here means accept completed on its own with an error. The
+        // intentional-timeout path returns error.Timeout directly above (after
+        // closing the listen socket) and never falls through here, so any error
+        // observed at this point is a genuine accept failure or an external
+        // cancellation, not our timeout close. Report it as AcceptFailed so
+        // callers can reliably distinguish a real timeout from a failure.
         return error.AcceptFailed;
     }
 };
