@@ -4,6 +4,12 @@ const std = @import("std");
 const Io = std.Io;
 const net = std.Io.net;
 
+/// Default browser-callback wait (5 minutes).
+pub const default_wait_timeout: Io.Timeout = .{ .duration = .{
+    .raw = .fromSeconds(5 * 60),
+    .clock = .real,
+} };
+
 pub const CallbackResult = struct {
     code: []u8,
     state: []u8,
@@ -21,6 +27,7 @@ pub const Error = error{
     InvalidCallback,
     MissingCode,
     MissingState,
+    Timeout,
     OutOfMemory,
     WriteFailed,
     ReadFailed,
@@ -30,6 +37,8 @@ pub const Listener = struct {
     server: net.Server,
     port: u16,
     io: Io,
+    /// True after server socket was closed (timeout cancel or normal deinit).
+    closed: bool = false,
 
     pub fn start(io: Io) Error!Listener {
         const addr: net.IpAddress = .{ .ip4 = .loopback(0) };
@@ -50,7 +59,10 @@ pub const Listener = struct {
     }
 
     pub fn deinit(self: *Listener) void {
-        self.server.deinit(self.io);
+        if (!self.closed) {
+            self.server.deinit(self.io);
+            self.closed = true;
+        }
         self.* = undefined;
     }
 
@@ -58,9 +70,10 @@ pub const Listener = struct {
         return std.fmt.bufPrint(buf, "http://127.0.0.1:{d}/callback", .{self.port});
     }
 
-    /// Block until one HTTP request arrives; parse `code` and `state` query params.
-    pub fn wait(self: *Listener, allocator: std.mem.Allocator) Error!CallbackResult {
-        const stream = self.server.accept(self.io) catch return error.AcceptFailed;
+    /// Block until one valid callback arrives (or `timeout` elapses).
+    /// Pass `.none` for no deadline; `default_wait_timeout` for CLI login.
+    pub fn wait(self: *Listener, allocator: std.mem.Allocator, timeout: Io.Timeout) Error!CallbackResult {
+        const stream = try self.acceptStream(timeout);
         defer stream.close(self.io);
 
         var in_buf: [8192]u8 = undefined;
@@ -80,7 +93,11 @@ pub const Listener = struct {
             if (head.items.len > 16 * 1024) return error.InvalidCallback;
         }
 
-        const target = parseRequestTarget(head.items) orelse return error.InvalidCallback;
+        const line = firstRequestLine(head.items) orelse return error.InvalidCallback;
+        const target = parseRequestTarget(line) orelse return error.InvalidCallback;
+        if (!std.mem.eql(u8, parseMethod(line) orelse "", "GET")) return error.InvalidCallback;
+        if (!pathIsCallback(target)) return error.InvalidCallback;
+
         const code = queryParam(target, "code") orelse return error.MissingCode;
         const state = queryParam(target, "state") orelse return error.MissingState;
 
@@ -103,15 +120,102 @@ pub const Listener = struct {
             .state = state_owned,
         };
     }
+
+    fn acceptStream(self: *Listener, timeout: Io.Timeout) Error!net.Stream {
+        if (timeout == .none) {
+            return self.server.accept(self.io) catch return error.AcceptFailed;
+        }
+
+        // Concurrent accept + timed wait on a readiness flag. On timeout, close
+        // the listen socket so accept unblocks (SocketNotListening).
+        const Shared = struct {
+            stream: ?net.Stream = null,
+            err: ?net.Server.AcceptError = null,
+            /// 0 = waiting, 1 = accept finished (success or error).
+            ready: std.atomic.Value(u32) = .init(0),
+        };
+        var shared: Shared = .{};
+
+        const AcceptTask = struct {
+            fn run(listener: *Listener, st: *Shared) void {
+                const s = listener.server.accept(listener.io) catch |e| {
+                    st.err = e;
+                    st.ready.store(1, .release);
+                    Io.futexWake(listener.io, u32, &st.ready.raw, 1);
+                    return;
+                };
+                st.stream = s;
+                st.ready.store(1, .release);
+                Io.futexWake(listener.io, u32, &st.ready.raw, 1);
+            }
+        };
+
+        var fut = Io.concurrent(self.io, AcceptTask.run, .{ self, &shared }) catch {
+            // A deadline was requested but we cannot honor it without
+            // concurrency; fail instead of silently blocking forever.
+            return error.AcceptFailed;
+        };
+
+        // Wait until ready or timeout. Spurious wakeups re-check the flag.
+        while (shared.ready.load(.acquire) == 0) {
+            Io.futexWaitTimeout(self.io, u32, &shared.ready.raw, 0, timeout) catch |e| switch (e) {
+                error.Timeout => {
+                    if (shared.ready.load(.acquire) != 0) break;
+                    // Unblock accept by closing the listen socket.
+                    if (!self.closed) {
+                        self.server.deinit(self.io);
+                        self.closed = true;
+                    }
+                    _ = fut.await(self.io);
+                    // Prefer stream if accept raced past the close.
+                    if (shared.stream) |s| return s;
+                    return error.Timeout;
+                },
+                error.Canceled => {
+                    if (!self.closed) {
+                        self.server.deinit(self.io);
+                        self.closed = true;
+                    }
+                    _ = fut.await(self.io);
+                    return error.AcceptFailed;
+                },
+            };
+        }
+
+        _ = fut.await(self.io);
+        if (shared.stream) |s| return s;
+        if (shared.err) |e| switch (e) {
+            error.SocketNotListening, error.Canceled => return error.Timeout,
+            else => return error.AcceptFailed,
+        };
+        return error.AcceptFailed;
+    }
 };
 
-fn parseRequestTarget(head: []const u8) ?[]const u8 {
-    // First line: METHOD target HTTP/1.x
+fn firstRequestLine(head: []const u8) ?[]const u8 {
     const line_end = std.mem.indexOf(u8, head, "\r\n") orelse return null;
-    const line = head[0..line_end];
+    return head[0..line_end];
+}
+
+fn parseMethod(line: []const u8) ?[]const u8 {
+    var it = std.mem.tokenizeScalar(u8, line, ' ');
+    return it.next();
+}
+
+fn parseRequestTarget(line: []const u8) ?[]const u8 {
+    // METHOD target HTTP/1.x
     var it = std.mem.tokenizeScalar(u8, line, ' ');
     _ = it.next() orelse return null; // method
     return it.next();
+}
+
+/// Path component (before `?`) must be `/callback`.
+fn pathIsCallback(target: []const u8) bool {
+    const path = if (std.mem.indexOfScalar(u8, target, '?')) |q|
+        target[0..q]
+    else
+        target;
+    return std.mem.eql(u8, path, "/callback");
 }
 
 fn queryParam(target: []const u8, key: []const u8) ?[]const u8 {
@@ -133,7 +237,21 @@ test "queryParam extracts code and state" {
     try std.testing.expect(queryParam(t, "missing") == null);
 }
 
-test "parseRequestTarget" {
+test "parseRequestTarget and method" {
+    const line = "GET /callback?code=a&state=b HTTP/1.1";
+    try std.testing.expectEqualStrings("GET", parseMethod(line).?);
+    try std.testing.expectEqualStrings("/callback?code=a&state=b", parseRequestTarget(line).?);
+}
+
+test "pathIsCallback rejects wrong paths" {
+    try std.testing.expect(pathIsCallback("/callback?code=a&state=b"));
+    try std.testing.expect(pathIsCallback("/callback"));
+    try std.testing.expect(!pathIsCallback("/other?code=a&state=b"));
+    try std.testing.expect(!pathIsCallback("/callback/extra"));
+    try std.testing.expect(!pathIsCallback("/"));
+}
+
+test "firstRequestLine" {
     const head = "GET /callback?code=a&state=b HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n";
-    try std.testing.expectEqualStrings("/callback?code=a&state=b", parseRequestTarget(head).?);
+    try std.testing.expectEqualStrings("GET /callback?code=a&state=b HTTP/1.1", firstRequestLine(head).?);
 }
