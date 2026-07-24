@@ -39,12 +39,8 @@ pub const Session = struct {
         allocator.free(self.clerk_user_id);
         if (self.email) |e| allocator.free(e);
         // Owned by getSession; const in the public type so putSession can borrow.
-        std.crypto.secureZero(u8, @constCast(self.access_token));
-        allocator.free(self.access_token);
-        if (self.refresh_token) |t| {
-            std.crypto.secureZero(u8, @constCast(t));
-            allocator.free(t);
-        }
+        secureFree(allocator, self.access_token);
+        if (self.refresh_token) |t| secureFree(allocator, t);
         if (self.scopes) |s| allocator.free(s);
         self.* = undefined;
     }
@@ -231,9 +227,9 @@ pub const Store = struct {
         const email = try dupText(allocator, row, 1);
         errdefer if (email) |e| allocator.free(e);
         const access = try dupText(allocator, row, 2) orelse return error.SqliteStep;
-        errdefer allocator.free(access);
+        errdefer secureFree(allocator, access);
         const refresh = try dupText(allocator, row, 3);
-        errdefer if (refresh) |t| allocator.free(t);
+        errdefer if (refresh) |t| secureFree(allocator, t);
         const expires_at = row.int(4) catch return error.SqliteStep;
         const scopes = try dupText(allocator, row, 5);
         errdefer if (scopes) |s| allocator.free(s);
@@ -257,6 +253,13 @@ pub const Store = struct {
 
 fn mkdirp(io: Io, path: []const u8) !void {
     try Dir.cwd().createDirPath(io, path);
+}
+
+/// Securely wipe a token buffer before returning it to the allocator, so token
+/// bytes never linger in freed memory (used on both normal and error cleanup).
+fn secureFree(allocator: std.mem.Allocator, bytes: []const u8) void {
+    std.crypto.secureZero(u8, @constCast(bytes));
+    allocator.free(bytes);
 }
 
 fn bindText(stmt: *libsql.Statement, idx: usize, text: []const u8) Error!void {
