@@ -410,3 +410,45 @@ test "put get remove roundtrip via loadPath save" {
     defer reg3.deinit();
     try std.testing.expect(reg3.get("hasky") == null);
 }
+
+test "parseManifest rejects incomplete tool and unknown keys" {
+    const gpa = std.testing.allocator;
+    try std.testing.expectError(error.MalformedManifest, parseManifest(gpa,
+        \\[[tool]]
+        \\name = "x"
+        \\
+    ));
+    try std.testing.expectError(error.MalformedManifest, parseManifest(gpa,
+        \\[[tool]]
+        \\name = "x"
+        \\version = "1"
+        \\path = "/abs"
+        \\updated_at = 1
+        \\extra = "nope"
+        \\
+    ));
+}
+
+test "parseManifest OOM is clean under checkAllAllocationFailures" {
+    const gpa = std.testing.allocator;
+    const sample =
+        \\[[tool]]
+        \\name = "rusty"
+        \\version = "0.0.1"
+        \\path = "/tmp/pms/rusty"
+        \\updated_at = 1
+        \\
+    ;
+    try std.testing.checkAllAllocationFailures(gpa, struct {
+        fn impl(allocator: std.mem.Allocator, text: []const u8) !void {
+            var list = parseManifest(allocator, text) catch |e| switch (e) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => return e,
+            };
+            defer {
+                for (list.items) |*ent| ent.deinit(allocator);
+                list.deinit(allocator);
+            }
+        }
+    }.impl, .{sample});
+}
