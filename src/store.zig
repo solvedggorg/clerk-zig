@@ -38,8 +38,9 @@ pub const Session = struct {
     pub fn deinit(self: *Session, allocator: std.mem.Allocator) void {
         allocator.free(self.clerk_user_id);
         if (self.email) |e| allocator.free(e);
-        allocator.free(self.access_token);
-        if (self.refresh_token) |t| allocator.free(t);
+        // Owned by getSession; const in the public type so putSession can borrow.
+        secureFree(allocator, self.access_token);
+        if (self.refresh_token) |t| secureFree(allocator, t);
         if (self.scopes) |s| allocator.free(s);
         self.* = undefined;
     }
@@ -51,13 +52,21 @@ pub const Store = struct {
     allocator: std.mem.Allocator,
 
     pub fn open(io: Io, allocator: std.mem.Allocator, env: *const Env) Error!Store {
-        // Ensure `$PMS_HOME/auth` exists before creating session.db.
+        // Ensure `$PMS_HOME/auth` exists (mode 0700) before creating session.db.
         const auth_dir = paths.authDir(allocator, env) catch |e| switch (e) {
             error.NoHomeDirectory => return error.NoHomeDirectory,
             error.OutOfMemory => return error.OutOfMemory,
         };
         defer allocator.free(auth_dir);
-        mkdirp(io, auth_dir) catch {};
+        _ = Dir.cwd().createDirPathStatus(io, auth_dir, .fromMode(0o700)) catch |e| {
+            log.err("failed to create auth directory {s}: {s}", .{ auth_dir, @errorName(e) });
+            return error.FilePermissions;
+        };
+        // Fail closed: re-apply 0700 even if the directory already existed.
+        Dir.cwd().setFilePermissions(io, auth_dir, .fromMode(0o700), .{}) catch |e| {
+            log.err("failed to restrict auth directory permissions for {s}: {s}", .{ auth_dir, @errorName(e) });
+            return error.FilePermissions;
+        };
 
         // Ownership of db_path transfers to openPathOwned (frees on all errors).
         const db_path = paths.sessionDbPath(allocator, env) catch |e| switch (e) {
@@ -218,9 +227,9 @@ pub const Store = struct {
         const email = try dupText(allocator, row, 1);
         errdefer if (email) |e| allocator.free(e);
         const access = try dupText(allocator, row, 2) orelse return error.SqliteStep;
-        errdefer allocator.free(access);
+        errdefer secureFree(allocator, access);
         const refresh = try dupText(allocator, row, 3);
-        errdefer if (refresh) |t| allocator.free(t);
+        errdefer if (refresh) |t| secureFree(allocator, t);
         const expires_at = row.int(4) catch return error.SqliteStep;
         const scopes = try dupText(allocator, row, 5);
         errdefer if (scopes) |s| allocator.free(s);
@@ -244,6 +253,13 @@ pub const Store = struct {
 
 fn mkdirp(io: Io, path: []const u8) !void {
     try Dir.cwd().createDirPath(io, path);
+}
+
+/// Securely wipe a token buffer before returning it to the allocator, so token
+/// bytes never linger in freed memory (used on both normal and error cleanup).
+fn secureFree(allocator: std.mem.Allocator, bytes: []const u8) void {
+    std.crypto.secureZero(u8, @constCast(bytes));
+    allocator.free(bytes);
 }
 
 fn bindText(stmt: *libsql.Statement, idx: usize, text: []const u8) Error!void {

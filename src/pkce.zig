@@ -24,8 +24,10 @@ pub const Pair = struct {
 pub fn generate(io: Io) Pair {
     var raw_v: [verifier_bytes]u8 = undefined;
     io.random(&raw_v);
+    defer std.crypto.secureZero(u8, &raw_v);
     var raw_s: [state_bytes]u8 = undefined;
     io.random(&raw_s);
+    defer std.crypto.secureZero(u8, &raw_s);
 
     var pair: Pair = undefined;
     _ = std.base64.url_safe_no_pad.Encoder.encode(&pair.verifier, &raw_v);
@@ -34,7 +36,15 @@ pub fn generate(io: Io) Pair {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(&pair.verifier, &digest, .{});
     _ = std.base64.url_safe_no_pad.Encoder.encode(&pair.challenge, &digest);
+    std.crypto.secureZero(u8, &digest);
     return pair;
+}
+
+/// Zero sensitive fields in a `Pair` after login completes (or fails mid-flow).
+pub fn wipe(pair: *Pair) void {
+    std.crypto.secureZero(u8, &pair.verifier);
+    std.crypto.secureZero(u8, &pair.challenge);
+    std.crypto.secureZero(u8, &pair.state);
 }
 
 test "pkce generate shapes and challenge is S256 of verifier" {
