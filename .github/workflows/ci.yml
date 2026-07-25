@@ -23,7 +23,7 @@ jobs:
   optimize_ci:
     uses: ./.github/workflows/graphite-ci-optimizer.yml
     secrets:
-      GRAPHITE_CI_TOKEN: ${{ secrets.GRAPHITE_CI_TOKEN }}
+      OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
 
   fmt:
     needs: optimize_ci

@@ -1,13 +1,16 @@
-# Graphite CI Optimizations — fail-open if token missing.
+# Graphite CI Optimizations — decide whether stacked mid/upstack PRs should skip
+# expensive work. Fail-open: missing token / 1Password load failure / API errors → skip=false.
+# Secrets live in 1Password vault "github actions". GitHub stores only OP_SERVICE_ACCOUNT_TOKEN.
+# 1Password ref: op://github actions/GRAPHITE_CI_TOKEN/credential
 # https://graphite.com/docs/stacking-and-ci
-# Secret: GRAPHITE_CI_TOKEN
+# https://developer.1password.com/docs/ci-cd/github-actions
 name: Graphite CI optimizer
 
 on:
   workflow_call:
     secrets:
-      GRAPHITE_CI_TOKEN:
-        description: Graphite CI optimizer token (repo secret GRAPHITE_CI_TOKEN)
+      OP_SERVICE_ACCOUNT_TOKEN:
+        description: 1Password service account token (repo secret OP_SERVICE_ACCOUNT_TOKEN)
         required: false
     outputs:
       skip:
@@ -25,8 +28,16 @@ jobs:
     outputs:
       skip: ${{ steps.check_skip.outputs.skip }}
     steps:
+      - name: Load secrets from 1Password
+        id: op
+        continue-on-error: true
+        uses: 1password/load-secrets-action@v4
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          GRAPHITE_CI_TOKEN: op://github actions/GRAPHITE_CI_TOKEN/credential
+
       - name: Optimize CI
         id: check_skip
         uses: withgraphite/graphite-ci-action@v0.0.11
         with:
-          graphite_token: ${{ secrets.GRAPHITE_CI_TOKEN }}
+          graphite_token: ${{ steps.op.outputs.GRAPHITE_CI_TOKEN }}

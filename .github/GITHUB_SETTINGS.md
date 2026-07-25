@@ -53,13 +53,21 @@ Official refs:
 4. GitHub **Autolink**: `https://linear.app/iresolved/issue/KEY-<num> (example: WORGO-123)` with prefix `AUTH-`.
 5. Prefer issue ID in **branch name** and **PR title**; use magic words in body (`Fixes AUTH-123`).
 
-## Secrets
+## Secrets (1Password)
 
-| Secret | Purpose |
+GitHub stores **one** Actions secret per repo. Everything else is loaded at runtime from the
+1Password vault **`github actions`** via the service account.
+
+| GitHub secret | Purpose |
 | --- | --- |
-| `GRAPHITE_CI_TOKEN` | Graphite CI Optimizations (fail-open if missing) |
+| `OP_SERVICE_ACCOUNT_TOKEN` | 1Password service account token (only secret on GitHub) |
 
-Create the optimization policy in [Graphite CI Optimizations](https://app.graphite.com/settings/ci-optimizations) for this repo.
+| 1Password item (vault `github actions`) | Field | Env / consumer | Purpose |
+| --- | --- | --- | --- |
+| `GRAPHITE_CI_TOKEN` | `credential` | `GRAPHITE_CI_TOKEN` | Graphite CI Optimizations (`op://github actions/GRAPHITE_CI_TOKEN/credential`) |
+
+Create the Graphite token in [Graphite → CI Optimizations](https://app.graphite.com/settings/ci-optimizations), store it in 1Password, then remove any legacy `GRAPHITE_CI_TOKEN` GitHub secret.
+
 
 ## CodeRabbit / Sourcery / Renovate (Graphite)
 
