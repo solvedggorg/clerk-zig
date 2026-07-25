@@ -4,6 +4,8 @@ zig-cache/
 zig-pkg
 zig-out
 *env*
+!.envrc
+!.env.example
 target
 dist
 node_modules
@@ -15,3 +17,9 @@ node_modules
 # rusty / cargo bridge build
 bridge/target/
 bridge/.rusty/
+
+# local agent / worktree tooling
+.rusty
+plans
+.agent
+.worktrees
