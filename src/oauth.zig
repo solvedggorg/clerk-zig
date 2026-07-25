@@ -146,13 +146,15 @@ pub fn revokeClient(
     cfg: Config,
     token: []const u8,
 ) void {
-    postFormRaw(client, allocator, cfg, "/oauth/revoke", &.{
+    const resp = postFormRaw(client, allocator, cfg, "/oauth/revoke", &.{
         .{ .k = "token", .v = token },
         .{ .k = "client_id", .v = cfg.client_id },
     }) catch |e| {
         log.debug("revoke request failed: {s}", .{@errorName(e)});
         return;
     };
+    // Response body is unused, but caller-owned; free it.
+    allocator.free(resp);
 }
 
 pub fn userInfo(
