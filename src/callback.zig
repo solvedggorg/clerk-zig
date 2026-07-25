@@ -31,6 +31,9 @@ pub const Error = error{
     OutOfMemory,
     WriteFailed,
     ReadFailed,
+    /// Timed wait requested, but the I/O implementation can't run accept
+    /// concurrently (e.g. single-threaded / -fsingle-threaded builds).
+    ConcurrencyUnavailable,
 };
 
 pub const Listener = struct {
@@ -151,9 +154,12 @@ pub const Listener = struct {
         };
 
         var fut = Io.concurrent(self.io, AcceptTask.run, .{ self, &shared }) catch {
-            // A deadline was requested but we cannot honor it without
-            // concurrency; fail instead of silently blocking forever.
-            return error.AcceptFailed;
+            // Honoring `timeout` requires running accept alongside a timed wait.
+            // When concurrency is unavailable (error.ConcurrencyUnavailable in
+            // single-threaded / -fsingle-threaded builds) a plain blocking accept
+            // would silently ignore the deadline and could hang the login flow
+            // forever, so surface the mode as unsupported instead.
+            return error.ConcurrencyUnavailable;
         };
 
         // Wait until ready or timeout. Spurious wakeups re-check the flag.
