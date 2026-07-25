@@ -1,0 +1,32 @@
+# Graphite CI Optimizations — fail-open if token missing.
+# https://graphite.com/docs/stacking-and-ci
+# Secret: GRAPHITE_CI_TOKEN
+name: Graphite CI optimizer
+
+on:
+  workflow_call:
+    secrets:
+      GRAPHITE_CI_TOKEN:
+        description: Graphite CI optimizer token (repo secret GRAPHITE_CI_TOKEN)
+        required: false
+    outputs:
+      skip:
+        description: "Whether callers should skip (string 'true' or 'false')"
+        value: ${{ jobs.optimize_ci.outputs.skip }}
+
+permissions:
+  contents: read
+
+jobs:
+  optimize_ci:
+    name: Graphite CI optimizer
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      skip: ${{ steps.check_skip.outputs.skip }}
+    steps:
+      - name: Optimize CI
+        id: check_skip
+        uses: withgraphite/graphite-ci-action@v0.0.11
+        with:
+          graphite_token: ${{ secrets.GRAPHITE_CI_TOKEN }}

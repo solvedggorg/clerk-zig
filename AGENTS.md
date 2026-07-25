@@ -76,3 +76,22 @@ Production dependency: **zig-libsql v0.2.1** (tag pin in `build.zig.zon`).
 2. Every store/oauth/registry change includes tests run by `zig build test`.
 3. First consumer cutover is **rusty** (delete `rusty/src/auth` after wire-up).
 4. Match zig-libsql consume patterns (`docs/CONSUMING.md`).
+
+## Linear + Graphite delivery
+
+| | |
+| --- | --- |
+| Linear team | **AUTH** (`AUTH`) |
+| Issue IDs | `AUTH-N` |
+| Issue trunk | `trunk-AUTH-N` from `master` |
+| Stack | Graphite (`gt create` / `gt submit --stack`) |
+| Land | `trunk-AUTH-N` → `master` |
+
+1. **Plan** first (Linear comment or short plan doc).
+2. **Stack** small PRs on `trunk-AUTH-N` — not mixed issues on one trunk.
+3. Keep Linear keys in commits, PR titles/bodies, and stack descriptions.
+4. Closing magic words in PR body: `Fixes AUTH-N` / `Closes AUTH-N`.
+5. Graphite: `gt modify` / `gt sync` / `gt submit` — not raw force-push.
+6. Agents must use the **Linear MCP** (`linear__*`) for issue work when available.
+
+Do **not** strip Linear refs for “OSS polish.” Product work belongs in Linear, not ad-hoc GitHub Issues.

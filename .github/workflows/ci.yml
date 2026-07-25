@@ -3,6 +3,9 @@ name: CI
 on:
   push:
   pull_request:
+    types: [opened, reopened, synchronize]
+    branches-ignore:
+      - "**/graphite-base/**"
   workflow_dispatch:
 
 permissions:
@@ -16,7 +19,15 @@ env:
   ZIG_VERSION: "0.16.0"
 
 jobs:
+
+  optimize_ci:
+    uses: ./.github/workflows/graphite-ci-optimizer.yml
+    secrets:
+      GRAPHITE_CI_TOKEN: ${{ secrets.GRAPHITE_CI_TOKEN }}
+
   fmt:
+    needs: optimize_ci
+    if: needs.optimize_ci.outputs.skip == 'false'
     name: zig fmt --check
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -34,6 +45,8 @@ jobs:
           zig fmt --check src build.zig build.zig.zon examples
 
   build-test:
+    needs: optimize_ci
+    if: needs.optimize_ci.outputs.skip == 'false'
     name: zig build && zig build test
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -53,6 +66,8 @@ jobs:
           zig build example
 
   test-release-safe:
+    needs: optimize_ci
+    if: needs.optimize_ci.outputs.skip == 'false'
     name: zig build test -Doptimize=ReleaseSafe
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -70,6 +85,8 @@ jobs:
           zig build test -Doptimize=ReleaseSafe
 
   consumer-smoke:
+    needs: optimize_ci
+    if: needs.optimize_ci.outputs.skip == 'false'
     name: path-dep consumer smoke
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -143,6 +160,5 @@ jobs:
               exit 1
             fi
           fi
-          # smoke prints via std.debug.print (stderr); capture both streams so grep sees the version.
-          ./zig-out/bin/smoke 2>&1 | grep -F "clerk-zig"
+          ./zig-out/bin/smoke | grep -F "clerk-zig"
           rm -rf "$SMOKE"
