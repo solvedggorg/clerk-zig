@@ -11,32 +11,35 @@
             "headers": {
                 "Authorization": "Bearer ${CLOUDFLARE_API_TOKEN}"
             }
-          },
-          "mintlify-docs": {
-              "type": "http",
-              "url": "https://mintlify.com/docs/mcp"
-          },
-          "mintlify": {
-              "url": "https://mcp.mintlify.com"
-          },
-          "deepl-developer-docs": {
-              "type": "http",
-              "url": "https://developers.deepl.com/mcp"
-          },
-          "deepl": {
-              "command": "bash",
-              "args": ["./scripts/run-deepl-mcp.sh"]
-          },
-          "notion": {
-              "url": "https://mcp.notion.com/mcp"
-          },
-          "solved-docs": {
-              "url": "https://docs.solved.gg/mcp"
-          },
-          "graphite": {
-              "command": "gt",
-              "args": ["mcp"]
-          }
+        },
+        "mintlify-docs": {
+            "type": "http",
+            "url": "https://mintlify.com/docs/mcp"
+        },
+        "mintlify": {
+            "url": "https://mcp.mintlify.com"
+        },
+        "deepl-developer-docs": {
+            "type": "http",
+            "url": "https://developers.deepl.com/mcp"
+        },
+        "deepl": {
+            "command": "bash",
+            "args": [
+                "./scripts/run-deepl-mcp.sh"
+            ]
+        },
+        "notion": {
+            "url": "https://mcp.notion.com/mcp"
+        },
+        "solved-docs": {
+            "url": "https://docs.solved.gg/mcp"
+        },
+        "graphite": {
+            "command": "gt",
+            "args": [
+                "mcp"
+            ]
         }
     }
 }
