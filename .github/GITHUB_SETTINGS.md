@@ -50,7 +50,7 @@ Official refs:
 1. Connect GitHub at [Linear → Integrations → GitHub](https://linear.app/settings/integrations/github).
 2. Enable this repository for the workspace.
 3. Per-team PR automations: draft → started, open → In Progress, merge → Done.
-4. GitHub **Autolink**: `https://linear.app/iresolved/issue/<num>` with prefix `AUTH-`.
+4. GitHub **Autolink**: `https://linear.app/iresolved/issue/KEY-<num> (example: WORGO-123)` with prefix `AUTH-`.
 5. Prefer issue ID in **branch name** and **PR title**; use magic words in body (`Fixes AUTH-123`).
 
 ## Secrets

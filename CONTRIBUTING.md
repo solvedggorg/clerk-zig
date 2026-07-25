@@ -11,7 +11,7 @@ Internal product work is tracked in **[Linear](https://linear.app)** team **AUTH
 | --- | --- |
 | Linear issue | `AUTH-N` |
 | Issue trunk | `trunk-AUTH-N` (from `master`) |
-| Stack PRs | Graphite stack basing on the issue trunk |
+| Stack PRs | Graphite stack based on the issue trunk |
 | Land PR | `trunk-AUTH-N` → `master` (squash preferred) |
 
 ```text
