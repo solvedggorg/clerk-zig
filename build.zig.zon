@@ -4,9 +4,10 @@
     .fingerprint = 0xd8c443889ae04b73, // Changing this has security and trust implications.
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        // master @ amalg-optimize (lastErrorMessage is error union; v0.2.1 is older).
         .zig_libsql = .{
-            .url = "https://github.com/solvedggorg/zig-libsql/archive/refs/tags/v0.2.1.tar.gz",
-            .hash = "zig_libsql-0.2.1-sj_Iy2e-mgAOBGUwHMCGUBEXsx4293L9UEBHyS4-8yIT",
+            .url = "https://github.com/solvedggorg/zig-libsql/archive/3e1c2c88812f27da1c6ec4ced06b4414fefe8f7c.tar.gz",
+            .hash = "zig_libsql-0.2.1-sj_Iyw6NNwGSjbvQkfw3L-pBTHGHXeN__lcfBoosAxfv",
         },
     },
     .paths = .{

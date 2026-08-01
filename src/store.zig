@@ -144,7 +144,7 @@ pub const Store = struct {
     fn exec(self: *Store, sql: []const u8) Error!void {
         var conn = self.db.connect();
         conn.exec(sql, .{}) catch |e| {
-            log.err("sqlite exec: {s}", .{conn.lastErrorMessage()});
+            log.err("sqlite exec: {s}", .{conn.lastErrorMessage() catch "unknown"});
             return switch (e) {
                 error.OutOfMemory => error.OutOfMemory,
                 else => error.SqliteExec,
@@ -167,7 +167,7 @@ pub const Store = struct {
         ;
         var conn = self.db.connect();
         var stmt = conn.prepare(sql) catch |e| {
-            log.err("sqlite prepare: {s}", .{conn.lastErrorMessage()});
+            log.err("sqlite prepare: {s}", .{conn.lastErrorMessage() catch "unknown"});
             return switch (e) {
                 error.OutOfMemory => error.OutOfMemory,
                 else => error.SqlitePrepare,
@@ -190,7 +190,7 @@ pub const Store = struct {
         };
 
         stmt.execute() catch |e| {
-            log.err("sqlite step: {s}", .{conn.lastErrorMessage()});
+            log.err("sqlite step: {s}", .{conn.lastErrorMessage() catch "unknown"});
             return switch (e) {
                 error.OutOfMemory => error.OutOfMemory,
                 error.Bind => error.SqliteBind,
@@ -206,7 +206,7 @@ pub const Store = struct {
         ;
         var conn = self.db.connect();
         var stmt = conn.prepare(sql) catch |e| {
-            log.err("sqlite prepare: {s}", .{conn.lastErrorMessage()});
+            log.err("sqlite prepare: {s}", .{conn.lastErrorMessage() catch "unknown"});
             return switch (e) {
                 error.OutOfMemory => error.OutOfMemory,
                 else => error.SqlitePrepare,
@@ -215,7 +215,7 @@ pub const Store = struct {
         defer stmt.deinit();
 
         const row = stmt.step() catch |e| {
-            log.err("sqlite step: {s}", .{conn.lastErrorMessage()});
+            log.err("sqlite step: {s}", .{conn.lastErrorMessage() catch "unknown"});
             return switch (e) {
                 error.OutOfMemory => error.OutOfMemory,
                 else => error.SqliteStep,
