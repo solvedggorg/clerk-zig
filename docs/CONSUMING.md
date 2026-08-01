@@ -1,15 +1,37 @@
 # Consuming clerk-zig
 
-How product toolchains (rusty, scripty, hasky, …) depend on this package.
+> **Prefer [pms-sdk](../../pms-sdk)** for product toolchains.
+> Products should depend on **`pms_sdk` only** and use `pms.auth` (this package
+> is the implementation detail behind that façade). Direct `clerk_zig` deps are
+> deprecated for rusty / worgo / hasky / … and will be removed from product
+> `build.zig.zon` files.
+
+How to use this package **if** you are working on clerk-zig itself, or on the
+pms-sdk auth façade.
 
 ## Requirements
 
 - Zig **0.16.x**
 - Linux
-- **zig-libsql** is transitive via clerk-zig (no need for PMs to depend on it
-  unless they use libsql directly)
+- **zig-libsql** is transitive via clerk-zig
 
-## Production (tag fetch)
+## Product path (recommended)
+
+```zig
+// build.zig.zon — products
+.pms_sdk = .{ .path = "../pms-sdk" }, // or published tag later
+
+// application code
+const pms = @import("pms_sdk");
+var result = try pms.auth.login.run(io, allocator, env, out, err);
+const token = try pms.auth.resolveBearerToken(io, allocator, env);
+// Toolchain registry: pms.toolchain.Registry (not clerk.registry)
+```
+
+Full consumer guide for the suite: `pms-sdk/README.md` and
+`docs/suite-architecture.md`.
+
+## Direct clerk-zig (library maintainers only)
 
 ```sh
 zig fetch --save https://github.com/solvedggorg/clerk-zig/archive/refs/tags/v0.1.1.tar.gz
@@ -22,32 +44,16 @@ const clerk = b.dependency("clerk_zig", .{
     .optimize = optimize,
 });
 mod.addImport("clerk_zig", clerk.module("clerk_zig"));
-// Transitive zig-libsql (v0.2.1) is pulled automatically for the session store.
-// Depend on zig_libsql yourself only if you @import it directly.
 ```
 
-## Local path (development only)
-
-While hacking the monorepo, override with a path dep:
+Monorepo path dep while hacking clerk-zig:
 
 ```zig
 // build.zig.zon
 .dependencies = .{
     .clerk_zig = .{ .path = "../clerk-zig" },
-    // clerk-zig already depends on zig_libsql; re-export only if you use it directly
 },
 ```
-
-```zig
-// build.zig
-const clerk = b.dependency("clerk_zig", .{
-    .target = target,
-    .optimize = optimize,
-});
-mod.addImport("clerk_zig", clerk.module("clerk_zig"));
-```
-
-Do **not** ship path deps in production builds.
 
 ## Import
 
@@ -64,11 +70,6 @@ defer store.close();
 // Login orchestration (browser callback waits up to 5 minutes by default)
 var result = try clerk.login.run(io, allocator, env, out, err);
 defer result.deinit(allocator);
-
-// Optional: custom callback timeout
-// var result = try clerk.login.runWithTimeout(io, allocator, env, out, err, .{
-//     .duration = .{ .raw = .fromSeconds(120), .clock = .real },
-// });
 ```
 
 Ownership: returned slices from `paths.*`, `oauth.authorizeUrl`, `login.run`,
@@ -82,34 +83,33 @@ Module name: **`clerk_zig`**. Package name in `build.zig.zon`: **`clerk_zig`**.
 ## CLI skeleton (copy into your PM)
 
 Keep product-facing commands in the PM (`scripty auth …`, `hasky auth …`).
-Full reference: **rusty** `src/cli/auth_cmd.zig`.
+Full reference: **rusty** `src/cli/auth_cmd.zig` (uses `pms.auth`).
 
 ```zig
 // e.g. src/cli/auth_cmd.zig — branding only
-const clerk = @import("clerk_zig");
+const pms = @import("pms_sdk");
+const auth = pms.auth;
 
-// login:
-var result = try clerk.login.run(io, allocator, env, out, err);
+var result = try auth.login.run(io, allocator, env, out, err);
 defer result.deinit(allocator);
-
-// logout:
-try clerk.login.logout(io, allocator, env);
-
-// whoami / status: clerk.store.Store.open → get / refresh helpers
-// registry (optional for your CLI):
-//   var reg = try clerk.registry.Registry.load(io, allocator, env);
-//   defer reg.deinit();
-//   try reg.put(.{ .name = "scripty", .version = "…", .path = "…", .updated_at = … });
-//   try reg.save(io);
-//   for (reg.entries.items) |e| { … }  // list
+try auth.login.logout(io, allocator, env);
+// whoami / status: auth.store.Store.open → getSession
+// registry: pms.toolchain.Registry (clerk.registry is deprecated)
 ```
 
 Suggested subcommands: `login` | `logout` | `whoami` | `status` (+ optional
-registry list/register if the PM owns suite installs).
+toolchain registry list/register if the PM owns suite installs).
 
-## Registry API
+## Registry API (deprecated)
+
+> **Deprecated.** Prefer `pms.toolchain.Registry` (supports optional `sha256`).
+> `clerk.registry` remains for tag compatibility until clerk-zig 0.2.
 
 ```zig
+// New code:
+var reg = try @import("pms_sdk").toolchain.Registry.load(io, allocator, env);
+
+// Legacy (clerk-zig only):
 var reg = try clerk.registry.Registry.load(io, allocator, env);
 defer reg.deinit();
 

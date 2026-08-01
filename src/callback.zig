@@ -162,30 +162,36 @@ pub const Listener = struct {
             return error.ConcurrencyUnavailable;
         };
 
-        // Wait until ready or timeout. Spurious wakeups re-check the flag.
+        // Zig 0.16: futexWaitTimeout is Cancelable only (error.Canceled). A
+        // timeout unblocks with success; convert duration → deadline so
+        // re-waits after spurious wakeups keep the original deadline.
+        const deadline = timeout.toDeadline(self.io);
         while (shared.ready.load(.acquire) == 0) {
-            Io.futexWaitTimeout(self.io, u32, &shared.ready.raw, 0, timeout) catch |e| switch (e) {
-                error.Timeout => {
-                    if (shared.ready.load(.acquire) != 0) break;
-                    // Unblock accept by closing the listen socket.
-                    if (!self.closed) {
-                        self.server.deinit(self.io);
-                        self.closed = true;
-                    }
-                    _ = fut.await(self.io);
-                    // Prefer stream if accept raced past the close.
-                    if (shared.stream) |s| return s;
-                    return error.Timeout;
-                },
-                error.Canceled => {
-                    if (!self.closed) {
-                        self.server.deinit(self.io);
-                        self.closed = true;
-                    }
-                    _ = fut.await(self.io);
-                    return error.AcceptFailed;
-                },
+            Io.futexWaitTimeout(self.io, u32, &shared.ready.raw, 0, deadline) catch {
+                // error.Canceled
+                if (!self.closed) {
+                    self.server.deinit(self.io);
+                    self.closed = true;
+                }
+                _ = fut.await(self.io);
+                return error.AcceptFailed;
             };
+            if (shared.ready.load(.acquire) != 0) break;
+
+            // Wait returned without ready: timeout or spurious. Past-deadline
+            // remaining duration is non-positive → treat as timeout.
+            const remaining = deadline.toDurationFromNow(self.io);
+            if (remaining) |rem| {
+                if (rem.raw.nanoseconds > 0) continue; // spurious
+            }
+            // Unblock accept by closing the listen socket.
+            if (!self.closed) {
+                self.server.deinit(self.io);
+                self.closed = true;
+            }
+            _ = fut.await(self.io);
+            if (shared.stream) |s| return s;
+            return error.Timeout;
         }
 
         _ = fut.await(self.io);

@@ -34,7 +34,9 @@ Requires Zig **0.16.x**, Linux. `zig-libsql` is a tag dependency (v0.2.1).
 
 ## Consume
 
-See [`docs/CONSUMING.md`](docs/CONSUMING.md).
+**Product toolchains should depend on [pms-sdk](../pms-sdk)** and use
+`pms.auth` — not a direct `clerk_zig` dependency. See
+[`docs/CONSUMING.md`](docs/CONSUMING.md).
 
 ## Docs
 
